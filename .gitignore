@@ -111,3 +111,8 @@ screenshots/*.webm
 
 replays/
 results/
+# Training artifacts. Regenerate by training; the submitted model is added deliberately.
+agent_code/*/logs/
+agent_code/*/training_log.csv
+agent_code/*/eval_curve.csv
+agent_code/*/my-saved-model.pt
