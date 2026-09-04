@@ -15,7 +15,9 @@ import settings as s
 
 from .model import ACTIONS, N_CHANNELS, QNetwork, action_mask, masked_argmax
 
-MODEL_FILE = Path(__file__).parent / "dqn-model.pt"
+# DQN_MODEL_FILE lets the evaluation pass point at one specific checkpoint
+# without disturbing the live training file.
+MODEL_FILE = Path(os.environ.get("DQN_MODEL_FILE") or (Path(__file__).parent / "dqn-model.pt"))
 
 # "global" feeds the whole board with the agent as one lit pixel, so the network
 # has to learn "walk toward a coin" separately for every position on the map.

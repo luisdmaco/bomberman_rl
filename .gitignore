@@ -116,3 +116,13 @@ agent_code/*/logs/
 agent_code/*/training_log.csv
 agent_code/*/eval_curve.csv
 agent_code/*/my-saved-model.pt
+
+# DQN checkpoints (large, regenerable)
+agent_code/*/checkpoints/
+
+# Working weights while the agent is still bad. When the model is the real
+# submission, add it deliberately: git add -f agent_code/dqn_agent/dqn-model.pt
+agent_code/*/dqn-model.pt
+
+# Superseded files the sandbox could not delete
+*.REPLACED-*

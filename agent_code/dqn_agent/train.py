@@ -30,6 +30,7 @@ from .callbacks import MODEL_FILE, state_to_features, view_shape
 from .model import ACTIONS, N_CHANNELS, QNetwork, ReplayBuffer, masked_argmax
 
 LOG_FILE = Path(__file__).parent / "training_log.csv"
+CHECKPOINT_DIR = Path(__file__).parent / "checkpoints"
 
 
 def _env(name: str, default, cast=float):
@@ -51,6 +52,9 @@ CONFIG = {
     "shaping_scale": _env("DQN_SHAPING_SCALE", 0.1),
     "grad_clip": _env("DQN_GRAD_CLIP", 10.0),
     "save_every": _env("DQN_SAVE_EVERY", 50, int),
+    # Numbered snapshots so an honest learning curve can be built afterwards
+    # by replaying each one frozen. 0 disables.
+    "checkpoint_every": _env("DQN_CHECKPOINT_EVERY", 0, int),
     "seed": _env("DQN_SEED", -1, int),
 }
 
@@ -178,6 +182,13 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
 
     if self.current_round % self.cfg["save_every"] == 0:
         _save(self)
+
+    every = self.cfg["checkpoint_every"]
+    if every and self.current_round % every == 0:
+        CHECKPOINT_DIR.mkdir(exist_ok=True)
+        path = CHECKPOINT_DIR / f"dqn-r{self.current_round:06d}.pt"
+        torch.save(self.q_network.state_dict(), path)
+        self.logger.info(f"Checkpoint {path.name}")
 
     _reset_round_stats(self)
 
