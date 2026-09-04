@@ -40,16 +40,32 @@ def _env(name: str, default, cast=float):
 CONFIG = {
     "gamma": _env("DQN_GAMMA", 0.95),
     "lr": _env("DQN_LR", 5e-4),
-    "batch_size": _env("DQN_BATCH", 32, int),
+    "batch_size": _env("DQN_BATCH", 128, int),
     "buffer_size": _env("DQN_BUFFER", 50_000, int),
     "learn_start": _env("DQN_LEARN_START", 2_000, int),
-    "train_every": _env("DQN_TRAIN_EVERY", 4, int),
+    # batch 128 every 16 steps consumes the same 8 samples per environment step
+    # as the old batch 32 every 4, but pays the per-update Python and BLAS
+    # overhead a quarter as often. The replay ratio is what matters for sample
+    # efficiency; the update frequency is mostly a speed knob.
+    "train_every": _env("DQN_TRAIN_EVERY", 16, int),
     "target_update": _env("DQN_TARGET_UPDATE", 1_000, int),
     "eps_start": _env("DQN_EPS_START", 1.0),
     "eps_end": _env("DQN_EPS_END", 0.05),
     "eps_decay_rounds": _env("DQN_EPS_DECAY", 400, int),
     "shaping": _env("DQN_SHAPING", 1, int),
-    "shaping_scale": _env("DQN_SHAPING_SCALE", 0.1),
+    "shaping_scale": _env("DQN_SHAPING_SCALE", 0.05),
+    # Discount used INSIDE the shaping term, deliberately separate from gamma.
+    # At 0.95 the term gamma*Phi(s') - Phi(s) leaves a residual of
+    # Phi(s)*(gamma-1) = +0.005*distance every step the distance does not
+    # change, so shuffling between two tiles far from any coin paid +0.065 per
+    # two steps forever. At 1.0 standing still is worth exactly 0 and the step
+    # penalty makes it strictly negative. See experiments/LOG.md 2026-09-05.
+    "shaping_gamma": _env("DQN_SHAPING_GAMMA", 1.0),
+    # Distance beyond which the potential flattens. Without a cap, collecting a
+    # coin when the next one is far is a large negative jump in Phi: at scale
+    # 0.1 uncapped, collecting could cost -1.77 against a +1.0 coin, so the
+    # agent was penalised for finishing a round.
+    "shaping_cap": _env("DQN_SHAPING_CAP", 10, int),
     "grad_clip": _env("DQN_GRAD_CLIP", 10.0),
     "save_every": _env("DQN_SAVE_EVERY", 50, int),
     # Numbered snapshots so an honest learning curve can be built afterwards
@@ -262,11 +278,16 @@ def _encode(self, game_state: dict):
 def _reward(self, events: List[str], phi_old: float, phi_new: float) -> float:
     reward = sum(REWARDS.get(ev, 0.0) for ev in events) + STEP_PENALTY
     if self.cfg["shaping"]:
-        # Potential-based shaping, F = gamma * Phi(s') - Phi(s). Ng, Harada &
+        # Potential-based shaping, F = gamma_s * Phi(s') - Phi(s). Ng, Harada &
         # Russell (1999): a term of this form leaves the optimal policy
         # unchanged, which is why the potential depends only on the state and
         # never on the action taken to reach it.
-        reward += self.cfg["gamma"] * phi_new - phi_old
+        #
+        # gamma_s is 1.0 by default rather than the agent's gamma. That trades
+        # the theorem's exact invariance for a term with no per-step drift,
+        # which matters far more in practice: the drift version handed the agent
+        # a dense positive reward for making no progress and it took it.
+        reward += self.cfg["shaping_gamma"] * phi_new - phi_old
     return reward
 
 
@@ -276,7 +297,7 @@ def _potential(self, game_state: dict) -> float:
     distance = _distance_to_nearest_coin(game_state)
     if distance is None:
         return 0.0
-    return -self.cfg["shaping_scale"] * distance
+    return -self.cfg["shaping_scale"] * min(distance, self.cfg["shaping_cap"])
 
 
 def _distance_to_nearest_coin(game_state: dict):

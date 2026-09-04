@@ -82,34 +82,51 @@ class QNetwork(nn.Module):
 
 
 class ReplayBuffer:
-    """Uniform experience replay.
+    """Uniform experience replay, storing states as uint8.
 
-    Prioritised replay is a planned upgrade. Uniform first, so that the
-    prioritised version has an honest baseline to be compared against in the
-    report rather than being adopted on faith.
+    Five of the six channels are binary and the sixth is a 0..1 danger level, so
+    float32 storage wastes three quarters of the memory for no precision that
+    matters. Quantising to uint8 takes a 50,000-transition buffer from 406 MB to
+    101 MB, which is what makes running several training runs in parallel
+    comfortable rather than a memory-pressure problem.
+
+    Prioritised replay is a planned upgrade. Uniform first, so the prioritised
+    version has an honest baseline to be measured against rather than being
+    adopted on faith.
     """
+
+    SCALE = 255.0
 
     def __init__(self, capacity: int, rng: random.Random = None):
         self.memory = deque(maxlen=capacity)
         self.rng = rng or random.Random()
 
+    @classmethod
+    def _pack(cls, state):
+        if state is None:
+            return None
+        return (np.clip(state, 0.0, 1.0) * cls.SCALE).astype(np.uint8)
+
     def push(self, state, action, next_state, reward, done):
-        self.memory.append(Transition(state, action, next_state, reward, done))
+        self.memory.append(
+            Transition(self._pack(state), action, self._pack(next_state), reward, done)
+        )
 
     def sample(self, batch_size: int):
         batch = self.rng.sample(self.memory, batch_size)
 
-        states = torch.from_numpy(np.stack([t.state for t in batch])).float()
         actions = torch.tensor([t.action for t in batch], dtype=torch.int64)
         rewards = torch.tensor([t.reward for t in batch], dtype=torch.float32)
         dones = torch.tensor([t.done for t in batch], dtype=torch.float32)
+
+        states = torch.from_numpy(np.stack([t.state for t in batch])).float().div_(self.SCALE)
 
         # Terminal transitions have no successor. Feed a zero state and mask it
         # out with `dones` so the shapes stay rectangular.
         zero = np.zeros_like(batch[0].state)
         next_states = torch.from_numpy(
             np.stack([t.next_state if t.next_state is not None else zero for t in batch])
-        ).float()
+        ).float().div_(self.SCALE)
 
         return states, actions, next_states, rewards, dones
 

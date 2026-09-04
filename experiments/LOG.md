@@ -21,7 +21,21 @@ Gate 1 is **not** passed. The agent is currently worse than a random walk.
 Two tooling bugs found and fixed so far. Neither was a modelling problem, both
 were measurement or plumbing problems, and both made the numbers lie.
 
-Next run to do: `--rounds 3000` continuous, then read `eval_curve.csv`.
+3000 clean rounds produced no learning: frozen coins wandered between 2.6 and
+6.2 with no trend, and `mean_steps` was exactly 400.0 at every checkpoint, so
+the board was never cleared. `invalid_per_round` did fall to ~0, so the network
+was learning wall avoidance. Cause found: the reward function. See the
+2026-09-05 entry.
+
+Next run to do, now that the reward is fixed:
+
+```
+python tools/sweep.py --rounds 3000 --jobs 6
+```
+
+Six configs in parallel, one core and ~100 MB each. The decisive comparison is
+`baseline` (fixed shaping) vs `no_shaping` vs `old_shaping` (the bug, kept
+deliberately for the report's ablation).
 
 ---
 
@@ -114,6 +128,108 @@ over the first half and the second half exploits.
 ---
 
 # Part 2 — Log
+
+## 2026-09-05 — Bug #3: the reward function paid the agent to do nothing
+
+**Symptom.** 3000 rounds of clean continuous training, frozen curve flat:
+2.90, 3.27, 2.58, 4.58, 4.78, 6.17, 3.50, 4.58, 3.92, 4.28, 3.60, 4.97.
+`mean_steps` 400.0 at every checkpoint. `invalid_per_round` near 0.
+
+That combination is the tell: it HAD learned (wall avoidance is real learning),
+it just had not learned to collect coins. So the problem was what we were paying
+it for, not whether it could learn.
+
+**Cause.** The shaping term `F = gamma * Phi(s') - Phi(s)` with `Phi = -0.1*d`
+and gamma 0.95. Two consequences, both arithmetic, both verifiable by hand:
+
+1. When the distance does not change, F leaves a residual of
+   `Phi(s)*(gamma-1) = +0.005*d` per step. Shuffling between two tiles 10 steps
+   from the nearest coin paid **+0.065 every two steps, forever**. At distance
+   15, +0.115. Over a 400-step round that is roughly +13 to +23 for making no
+   progress whatsoever.
+2. Collecting a coin makes the nearest-coin distance jump, so Phi drops
+   discontinuously. Once the next coin was 12 or more steps away, collecting was
+   **net negative**: -0.06 at distance 12, -0.35 at distance 15, and as bad as
+   -1.77 in the worst case against a +1.0 coin reward.
+
+So late in a round, when coins get sparse, the reward function punished the
+agent for finishing and paid it to hover. It learned exactly that. This is
+precisely the bad local optimum the project spec warns about, and it was my
+reward design, not the network.
+
+**Fix.** Three parameters, all now separately controllable:
+
+| Parameter | Was | Now | Why |
+|---|---|---|---|
+| `DQN_SHAPING_GAMMA` | tied to gamma, 0.95 | 1.0 | Removes the per-step drift entirely. Standing still is worth exactly 0, so the step penalty makes hovering strictly negative. |
+| `DQN_SHAPING_SCALE` | 0.1 | 0.05 | Keeps collecting net positive. |
+| `DQN_SHAPING_CAP` | none | 10 | Flattens the potential past 10 tiles, bounding the jump when a coin is collected. |
+
+Verified all three behaviours now have the right sign:
+
+| Behaviour | Before | After | Required |
+|---|---|---|---|
+| Oscillate at d=10, per 2 steps | +0.065 | -0.040 | negative |
+| Step toward a coin | +0.100 | +0.030 | positive |
+| Collect a coin, worst case | -1.770 | +0.530 | positive |
+
+Setting the shaping discount to 1.0 gives up the exact policy-invariance of
+Ng, Harada & Russell (1999), which holds for gamma_shaping = gamma. That is a
+deliberate trade: the theorem guarantees the asymptotic optimum is unchanged,
+but says nothing about a learner with a 20-step effective horizon finding it,
+and the drift version handed that learner a dense reward for standing still.
+
+**Not yet known.** Whether the fixed reward actually learns. A 200-round smoke
+test still scored 4, but epsilon had barely annealed and learning had only just
+started, so it says nothing either way. The sweep is the real test.
+
+**For the report.** `old_shaping` is kept as a sweep config so the broken
+version can be measured against the fixed one. A shaping design that provably
+creates a hovering optimum, with the arithmetic and the measured flat curve, is
+a genuine result.
+
+
+## 2026-09-04 — Made training cheaper, and parallel
+
+**Question asked.** Can training go faster on an M3 Max (36 GB) without hitting swap?
+
+**Measured first.** `tools/profile_step.py` breaks one round down:
+
+| Cost per 400-step round | Share |
+|---|---|
+| Gradient steps | **92%** |
+| Network forward pass (acting) | 5% |
+| `state_to_features` | 2% |
+| BFS shaping | 0.2% |
+
+So the game loop is irrelevant and the gradient step is everything. Also
+measured: a second torch thread buys under 10% on a network this small, and
+batch 32 is the least efficient batch size per sample by a wide margin.
+
+**Machine was never the constraint.** 27.45 of 36 GB used, **0 bytes of swap**,
+CPU 76% idle. A single training run cannot use more than about one core because
+the game loop is serial Python.
+
+**Changes.**
+1. Replay buffer stores states as `uint8` instead of `float32`. Five of the six
+   channels are binary and the sixth is a 0..1 danger level, so the precision
+   was never used. 50,000 transitions: **406 MB -> 101 MB per process.**
+2. Default batch 32 every 4 steps -> **batch 128 every 16 steps**. Identical
+   replay ratio (8 samples per environment step, so sample efficiency is
+   unchanged) but a quarter as many per-update overheads.
+3. `DQN_THREADS` added, default 1. One thread per process, many processes.
+4. `tools/sweep.py`: runs several configurations at once, each in its own agent
+   directory so checkpoints and logs never collide. Default configs are the
+   ablations the report needs: shaping on/off, egocentric vs global view, two
+   learning rates, and old-vs-new batch settings.
+
+The spec forbids multiprocessing in the *submitted agent* but explicitly allows
+it for training.
+
+**What this does not do.** None of it makes the agent better. It means the whole
+ablation runs in the time one run used to take, which is how we find out what
+actually fixes the frozen-policy problem.
+
 
 ## 2026-09-04 — Bug #2: chunked training reset everything
 

@@ -38,8 +38,12 @@ def setup(self):
     """Called once before the first round."""
     # In official games the agent gets one thread. Pinning it here keeps the
     # measured per-step time honest and avoids thread-thrash on a loaded box.
-    if not self.train:
-        torch.set_num_threads(1)
+    #
+    # During training the default is also 1, deliberately. This network is small
+    # enough that a second thread buys under 10%, while a second *process* buys
+    # a whole extra run. One thread each and several runs in parallel beats one
+    # run with many threads. Override with DQN_THREADS if you disagree.
+    torch.set_num_threads(1 if not self.train else int(os.environ.get("DQN_THREADS", 1)))
 
     self.device = torch.device("cpu")
     rows, cols = view_shape(s.ROWS, s.COLS)

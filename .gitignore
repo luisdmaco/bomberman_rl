@@ -126,3 +126,6 @@ agent_code/*/dqn-model.pt
 
 # Superseded files the sandbox could not delete
 *.REPLACED-*
+
+# Per-run agent copies created by tools/sweep.py
+agent_code/dqn_[!a]*/
