@@ -6,12 +6,73 @@ newest first.
 
 ---
 
-## STATUS (2026-09-04)
+## STATUS (2026-09-06, confirmed)
 
-Gate 1 is **not** passed. The agent is currently worse than a random walk.
+**GATE 1 PASSED.** `baseline` @ 250 rounds: 46.06 coins, 95% CI [45.5, 46.7],
+0 invalid actions, over 200 evaluation rounds with training off.
 
-| | Coins per round | What it means |
-|---|---|---|
+| config | @rounds | coins | 95% CI | steps | invalid | gate 1 |
+|---|---|---|---|---|---|---|
+| global_view | 2750 | 47.39 | [46.5, 48.3] | 234 | 3.19 | marginal |
+| baseline | 250 | 46.06 | [45.5, 46.7] | 351 | 0.00 | **PASS** |
+| lr_2e4 | 250 | 45.92 | [45.1, 46.8] | 346 | 1.88 | marginal |
+| old_shaping | 250 | 45.16 | [44.4, 45.9] | 364 | 0.00 | marginal |
+| no_shaping | 500 | 44.55 | [43.6, 45.5] | 369 | 0.01 | fail |
+
+Reference: `rule_based_agent` 50.0 in 125 steps; random walk ~18.
+
+**Carry `global_view` @ 2750 forward, not the gate-passing checkpoint.** It
+scores higher (47.4 vs 46.1), clears the board in 234 steps against 351, and is
+the only configuration that improves with training rather than decaying. Its
+3.19 invalid actions per round is a blemish to fix, not a reason to discard it.
+`baseline` @ 250 is a very early checkpoint that peaked while epsilon was still
+0.84 and then degraded; it wins the gate on a technicality (the zero-invalid
+clause, which I invented, is not in the project spec).
+
+### Before task 2
+
+1. **`DQN_VIEW` must not stay an environment variable for the submitted agent.**
+   Official games set no environment. If a global-view model ships, the default
+   in `callbacks.py` has to become `"global"` or the network is built with the
+   wrong shape and cannot load its own weights.
+2. **Remove `DQN_ACTIONS`.** Task 2 needs BOMB.
+3. **The `danger` channel has never been exercised.** It is all zeros in
+   coin-heaven. Re-verify the bomb-timer indexing against `environment.do_step`
+   before anything depends on it.
+4. **Fix the divergence** or adopt "keep the best checkpoint, not the last".
+   Most configs lose 30% of their performance between round 250 and round 3000.
+
+---|---|
+| `rule_based_agent` | 50.0 |
+| **best frozen DQN** | **47.9** (global_view @ 2750) |
+| Gate 1 target | 45 |
+| Random walk | ~18 |
+| Everything before the cache fix | 3 to 5 (void) |
+
+Run next:
+
+```
+python tools/confirm.py --n-rounds 200 --top 5
+```
+
+Two findings that reverse earlier assumptions, both in the 2026-09-06 entry:
+the **global** view beats the egocentric one, and my shaping "fix" made things
+worse than the version I called broken.
+
+---|---|
+| `rule_based_agent` | 50.0 |
+| **Gate 1 target** | **45** |
+| Random walk | ~18 |
+| Everything measured so far | 3 to 5 (void, see above) |
+
+Next run: re-run the sweep with the fix.
+
+```
+python tools/sweep.py --rounds 3000 --jobs 6
+python tools/compare.py --eval-rounds 40 --jobs 6
+```
+
+---|---|---|
 | `rule_based_agent` | 50.0 | The ceiling. Collects everything in ~125 steps. |
 | **Gate 1 target** | **45** | What we need. |
 | Random walk | ~18 | The floor. Wandering blindly still finds coins. |
@@ -128,6 +189,154 @@ over the first half and the second half exploits.
 ---
 
 # Part 2 — Log
+
+## 2026-09-06 (confirmed) — Gate 1 passed
+
+Re-measured the top checkpoint of each configuration over 200 fresh rounds
+(the sweep used 40, giving +/- 2 coins, too wide to claim a threshold, and
+taking the max of 72 measurements biases upward).
+
+`baseline` @ 250 rounds passes: 46.06 coins, CI [45.5, 46.7], 0 invalid.
+
+Three configurations are marginal: their means clear 45 but either the
+confidence interval dips below it or they commit a few invalid actions.
+Reporting those as passes would be overclaiming.
+
+The interesting entry is `global_view` @ 2750: 47.39 coins [46.5, 48.3] in 234
+steps, the best score and by far the fastest board clear, held back from a PASS
+only by 3.19 invalid actions per round (about 1.4% of its moves). Given it is
+also the only configuration that does not degrade with training, it is the
+better agent despite the verdict, and it is the one to carry into task 2.
+
+Worth noting for the report: the strict gate I wrote (zero invalid actions) is
+my own criterion, not the project spec's. It ranked the weaker agent first. That
+is a fair illustration of why the metric definition deserves as much scrutiny as
+the result.
+
+
+## 2026-09-06 — It learns. And two of my conclusions were wrong.
+
+**Result.** Re-ran the six-config sweep with the cache fix. Best frozen scores
+per config: 40.9 to 47.9 coins, against ~5 before. `mean_steps` drops below 400
+for the first time, i.e. the board actually gets cleared.
+
+Six checkpoints provisionally meet gate 1 (>= 45 coins, 0 invalid actions) on 40
+evaluation rounds:
+
+| config | rounds | coins | steps |
+|---|---|---|---|
+| baseline | 250 | 47.35 +/- 1.27 | 333 |
+| lr_2e4 | 250 | 47.00 +/- 0.72 | 367 |
+| global_view | 2250 | 46.35 +/- 2.12 | 280 |
+| old_shaping | 250 | 45.52 +/- 2.16 | 342 |
+| lr_2e4 | 500 | 45.48 +/- 1.76 | 335 |
+| old_shaping | 500 | 45.12 +/- 1.99 | 373 |
+
+Not yet a claim: 40 rounds gives +/- 2 coins, and taking the maximum of 72 noisy
+measurements biases upward. `tools/confirm.py` re-measures over 200 rounds.
+
+### Reversal 1: the global view is better, not worse
+
+`global_view` is the ONLY configuration that improves monotonically across the
+whole run, and the only one whose `mean_steps` falls steadily:
+
+```
+250:31.7(394 steps)  1000:37.9(362)  1750:42.9(301)  2250:46.4(280)  2750:47.9(236)
+```
+
+Every egocentric config peaks at 250-500 rounds and then decays. Likely
+explanation: the 13x13 crop discards coins outside the window. Early in a round
+coins are dense and the crop is enough; late in a round, when few coins remain
+and they are far away, the egocentric agent is simply blind and cannot improve.
+The global view always sees every coin.
+
+I previously read `global_view`'s high invalid-action count during training as
+evidence the crop was helping. That was wrong: it was behind on epsilon at the
+time. The corrected reading is the opposite.
+
+### Reversal 2: the "broken" shaping outperforms my fix
+
+Final frozen scores: `old_shaping` 44.5, `baseline` (fixed shaping) 32.2.
+`old_shaping` is also far more stable late in training.
+
+The arithmetic in the 2026-09-05 entry was correct: the discounted potential
+really does pay +0.065 per two steps for hovering. But it was diagnosing the
+wrong failure. With usable transitions, the agent can find something better than
+hovering, and the distance-proportional term evidently provides a stronger
+long-range gradient toward coins than the capped, undiscounted version.
+
+Being right about the arithmetic and wrong about the consequence is worth
+writing up as-is.
+
+### The real open problem: instability
+
+Most configurations peak early and then decay badly, with invalid actions
+climbing from 0 to 40-80 per round:
+
+```
+baseline   250:47.4(0 invalid) -> 3000:32.2(46 invalid)
+batch32    250:41.0(0)         -> 3000:27.6(54)
+lr_2e4     250:47.0(0)         -> 3000:36.3(24)
+```
+
+Peak performance at 250 rounds means the best policy came from a period when
+epsilon was still ~0.84. Continued training destroys it. That is textbook DQN
+divergence and it is now the main thing to fix. Candidates: lower learning rate,
+more frequent target syncs, gradient-clipping already on, or simply keeping the
+best checkpoint rather than the last one.
+
+Only `global_view` is immune, which is further evidence the egocentric crop is
+the source of the problem rather than a fix for it.
+
+
+## 2026-09-05 (evening) — Bug #4: every next_state was its own state
+
+**This is the one that mattered.** All previous results are void.
+
+**Symptom.** Six configurations, 3000 rounds each, all landed between 2.95 and
+5.20 frozen coins with overlapping confidence intervals. `mean_steps` 400.0
+everywhere. Nothing differed: not shaping on/off, not the fixed shaping vs the
+broken one, not egocentric vs global view, not learning rate, not batch size.
+
+Six variables changed and *nothing* moved. That is not six weak effects, that is
+a common cause upstream of all of them.
+
+**Cause.** The `_encode` cache added on 2026-09-03 as a speed optimisation, keyed
+on `(round, step)`. But `environment.do_step` increments `self.step` exactly once,
+at the top, before `poll_and_run_agents`. Both the state passed to `act()` and
+the successor state passed to `game_events_occurred()` are therefore built with
+the SAME step number. Every successor lookup hit the predecessor's cache entry.
+
+**Evidence.** Instrumented a real 2-round training run: 800 transitions
+examined, **800 shared a cache key, 800 had next_state == state. 100%.**
+After removing the cache: 35.2% identical, which is exactly right, since at
+epsilon 1.0 the agent bumps a wall about a third of the time and a failed move
+genuinely leaves the board unchanged (it matches the ~145 invalid actions per
+400 steps measured on day one).
+
+**Why it produced exactly these symptoms.** With `s' = s` the target becomes
+`r + gamma * max_a' Q(s,a')`: self-referential, no information flows backwards
+from future states. Only immediate rewards are learnable. Wall avoidance is an
+immediate -0.5, so it was learned to near zero. Coin collection needs value to
+propagate across steps, so it was unreachable. This also retroactively explains
+2026-09-03: the "frozen policy loops" observation was real, but the loop was a
+symptom of a value function that could not represent anything multi-step.
+
+**Fix.** Cache removed entirely, not repaired. Profiling put this encoding at
+~2% of a training round, so it was never worth the risk. There is a comment in
+`_encode` saying not to reintroduce it.
+
+**Lesson for the report.** Three earlier "fixes" (egocentric view, truncation
+handling, reward shaping) were all aimed at symptoms of this. Two of them were
+defensible improvements on their own terms and the shaping analysis was
+arithmetically correct, but none of them could have worked while the replay
+buffer contained no usable successor states. The diagnostic that finally worked
+was noticing that six independent variables all produced the identical result,
+which points upstream rather than at any of them.
+
+**Still unknown.** Whether the DQN learns once the data is correct. A validation
+run is in progress.
+
 
 ## 2026-09-05 — Bug #3: the reward function paid the agent to do nothing
 

@@ -111,9 +111,6 @@ def setup_training(self):
     self.epsilon = cfg["eps_start"]
     self.current_round = 0
     self.recent_losses = deque(maxlen=500)
-    # Consecutive steps share a state: this step's "old" is last step's "new".
-    # Caching the encoding and the BFS potential halves both per step.
-    self._encode_cache = {}
     _reset_round_stats(self)
 
     if not LOG_FILE.exists():
@@ -258,21 +255,27 @@ def _learn(self):
 
 
 def _encode(self, game_state: dict):
-    """Board tensor and BFS potential for one state, memoised across the two
-    calls that see it (as this step's successor, then next step's predecessor)."""
+    """Board tensor and BFS potential for one state.
+
+    This used to memoise on (round, step) to avoid encoding each state twice.
+    That was catastrophically wrong: environment.do_step increments self.step
+    ONCE at the top, so the state handed to act() and the state handed to
+    game_events_occurred() as its successor carry the SAME step number. The
+    cache therefore returned the predecessor's tensor for every successor, and
+    100% of transitions in the replay buffer had next_state == state.
+
+    The Bellman target degenerates to Q(s,a) <- r + gamma * max_a' Q(s,a'),
+    which can only ever learn immediate rewards. It explained the whole failure:
+    wall avoidance (a one-step penalty) was learned perfectly while coin
+    collection (multi-step) was impossible, and all six sweep configs were
+    identical because they all trained on the same corrupted transitions.
+
+    Profiling put this encoding at ~2% of a training round, so the cache was
+    never worth its risk. Do not reintroduce it.
+    """
     if game_state is None:
         return None, 0.0
-
-    key = (game_state["round"], game_state["step"])
-    hit = self._encode_cache.get(key)
-    if hit is not None:
-        return hit
-
-    value = (state_to_features(game_state), _potential(self, game_state))
-    if len(self._encode_cache) > 2:
-        self._encode_cache.clear()
-    self._encode_cache[key] = value
-    return value
+    return state_to_features(game_state), _potential(self, game_state)
 
 
 def _reward(self, events: List[str], phi_old: float, phi_new: float) -> float:
