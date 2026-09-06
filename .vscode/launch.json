@@ -1,0 +1,67 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Watch: gate-1 agent (GUI)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/main.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "args": ["play", "--agents", "dqn_agent",
+               "--scenario", "coin-heaven", "--n-rounds", "3",
+               "--update-interval", "0.08"],
+      "env": {"DQN_ACTIONS": "UP,RIGHT,DOWN,LEFT", "DQN_VIEW": "ego:13"}
+    },
+    {
+      "name": "Watch: best agent, global view (GUI)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/main.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "args": ["play", "--agents", "dqn_global_view",
+               "--scenario", "coin-heaven", "--n-rounds", "3",
+               "--update-interval", "0.08"],
+      "env": {"DQN_ACTIONS": "UP,RIGHT,DOWN,LEFT", "DQN_VIEW": "global"}
+    },
+    {
+      "name": "Step through one move at a time (turn-based)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/main.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "args": ["play", "--agents", "dqn_agent",
+               "--scenario", "coin-heaven", "--n-rounds", "1", "--turn-based"],
+      "env": {"DQN_ACTIONS": "UP,RIGHT,DOWN,LEFT", "DQN_VIEW": "ego:13"}
+    },
+    {
+      "name": "Debug training (no GUI, 5 rounds)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/main.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "args": ["play", "--no-gui", "--agents", "dqn_agent", "--train", "1",
+               "--scenario", "coin-heaven", "--n-rounds", "5"],
+      "env": {"DQN_ACTIONS": "UP,RIGHT,DOWN,LEFT", "DQN_VIEW": "ego:13"}
+    },
+    {
+      "name": "Submission check (train=False, 3 random agents)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/main.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "args": ["play", "--no-gui", "--agents", "dqn_agent",
+               "random_agent", "random_agent", "random_agent", "--n-rounds", "1"],
+      "env": {}
+    }
+  ]
+}

@@ -124,6 +124,66 @@ learns.
 
 Those two can disagree wildly. Ours disagreed by a factor of 7.
 
+## The six configurations
+
+Defined in `tools/sweep.py`. All six share the same base, then each changes
+**exactly one thing** from `baseline`. That is what makes this an ablation
+rather than six unrelated experiments.
+
+Shared by all six: BOMB masked out of the action set, 13x13 egocentric view,
+one CPU thread each, `coin-heaven` scenario.
+
+| Config | What differs from baseline | Question it answers |
+|---|---|---|
+| `baseline` | nothing | The reference the others are measured against |
+| `no_shaping` | `DQN_SHAPING=0` | Does the distance-to-coin bonus help at all? |
+| `global_view` | `DQN_VIEW=global`, the full 17x17 board | Is the egocentric crop helping or hurting? |
+| `lr_2e4` | `DQN_LR` 5e-4 -> 2e-4 | Is it learning too fast to stay stable? |
+| `batch32` | batch 32 every 4 steps, not 128 every 16 | Do smaller, more frequent updates learn better? |
+| `old_shaping` | the pre-fix reward shaping, deliberately | How much did the shaping fix actually change? |
+
+`batch32` looks like two changes but is one: 32 x (1/4) and 128 x (1/16) both
+consume 8 samples per environment step, so the data seen is identical and only
+the update rhythm differs. `old_shaping` looks like three
+(`DQN_SHAPING_GAMMA=0.95`, `DQN_SHAPING_SCALE=0.1`, `DQN_SHAPING_CAP=999`) but
+is one coherent setting: the discounted potential with no distance cap.
+
+`baseline` concretely means: gamma 0.95, learning rate 5e-4, batch 128 every 16
+steps, replay buffer 50,000, target network synced every 1000 updates, shaping
+on with gamma 1.0 / scale 0.05 / cap 10.
+
+## What one run costs
+
+Every configuration gets an identical budget.
+
+| | |
+|---|---|
+| Rounds | 3,000 |
+| Environment steps | ~1,200,000 |
+| Weight updates | 75,000 (300,000 for `batch32`) |
+| Transitions drawn from the buffer | ~9,600,000 |
+| Each experience reused | ~8 times |
+| Exploration | epsilon 1.0 -> 0.05 over the first 1,500 rounds |
+| Checkpoints saved | every 250 rounds, so 12 per run |
+| Replay buffer memory | ~100 MB per run (uint8) |
+
+Measured wall clock, six in parallel on an M3 Max, one core each:
+
+```
+old_shaping   36.9 min      baseline    44.9 min
+lr_2e4        44.6 min      no_shaping  45.0 min
+global_view   50.5 min      batch32     51.3 min
+```
+
+Total elapsed 51 minutes rather than about five hours sequentially.
+
+Two of those times mean something. `batch32` is slowest because 300,000 update
+calls carry four times the per-call overhead for the same amount of data. And
+`old_shaping` finishing eight minutes early is a result, not noise: a round ends
+as soon as every coin is collected, so a shorter run means it was actually
+clearing boards. That was visible in the wall clock before it was visible in the
+scores.
+
 ## What each file is
 
 | File | What it is | Trust it? |

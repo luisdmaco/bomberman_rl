@@ -41,7 +41,10 @@ def masked_argmax(q_values: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
     """argmax over the last dimension, ignoring disallowed actions."""
     return q_values.masked_fill(~mask, float("-inf")).argmax(dim=-1)
 
-Transition = namedtuple("Transition", ("state", "action", "next_state", "reward", "done"))
+
+Transition = namedtuple(
+    "Transition", ("state", "action", "next_state", "reward", "done")
+)
 
 
 class QNetwork(nn.Module):
@@ -55,8 +58,14 @@ class QNetwork(nn.Module):
     longer wait for convergence rather than a better coin collector.
     """
 
-    def __init__(self, rows: int, cols: int, n_channels: int = N_CHANNELS,
-                 n_actions: int = N_ACTIONS, width: int = 32):
+    def __init__(
+        self,
+        rows: int,
+        cols: int,
+        n_channels: int = N_CHANNELS,
+        n_actions: int = N_ACTIONS,
+        width: int = 32,
+    ):
         super().__init__()
         self.rows = rows
         self.cols = cols
@@ -97,7 +106,7 @@ class ReplayBuffer:
 
     SCALE = 255.0
 
-    def __init__(self, capacity: int, rng: random.Random = None):
+    def __init__(self, capacity: int, rng: random.Random = None):  # type: ignore
         self.memory = deque(maxlen=capacity)
         self.rng = rng or random.Random()
 
@@ -119,14 +128,24 @@ class ReplayBuffer:
         rewards = torch.tensor([t.reward for t in batch], dtype=torch.float32)
         dones = torch.tensor([t.done for t in batch], dtype=torch.float32)
 
-        states = torch.from_numpy(np.stack([t.state for t in batch])).float().div_(self.SCALE)
+        states = (
+            torch.from_numpy(np.stack([t.state for t in batch]))
+            .float()
+            .div_(self.SCALE)
+        )
 
         # Terminal transitions have no successor. Feed a zero state and mask it
         # out with `dones` so the shapes stay rectangular.
         zero = np.zeros_like(batch[0].state)
-        next_states = torch.from_numpy(
-            np.stack([t.next_state if t.next_state is not None else zero for t in batch])
-        ).float().div_(self.SCALE)
+        next_states = (
+            torch.from_numpy(
+                np.stack(
+                    [t.next_state if t.next_state is not None else zero for t in batch]
+                )
+            )
+            .float()
+            .div_(self.SCALE)
+        )
 
         return states, actions, next_states, rewards, dones
 
