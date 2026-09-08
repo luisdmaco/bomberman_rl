@@ -27,41 +27,11 @@ MODEL_FILE = Path(os.environ.get("DQN_MODEL_FILE") or (Path(__file__).parent / "
 VIEW = os.environ.get("DQN_VIEW", "ego:13")
 
 
-def view_shape(rows: int, cols: int, view: str = None):
-    view = view or VIEW
-    if view.startswith("ego:"):
-        size = int(view.split(":")[1])
+def view_shape(rows: int, cols: int):
+    if VIEW.startswith("ego:"):
+        size = int(VIEW.split(":")[1])
         return size, size
     return rows, cols
-
-
-def save_model(path, network, view: str):
-    """Store the view alongside the weights.
-
-    The view decides the network's input shape, so weights saved under one view
-    cannot be loaded under another. Reading it from an environment variable was
-    a submission bug waiting to happen: official games set no environment, so a
-    global-view model would silently be given an egocentric architecture and
-    fail to load. Now the checkpoint describes itself.
-    """
-    torch.save({"view": view, "state_dict": network.state_dict()}, path)
-
-
-def peek_view(path, fallback: str) -> str:
-    """What view was this checkpoint trained with? Falls back for older files
-    that hold a bare state_dict."""
-    try:
-        blob = torch.load(path, map_location="cpu", weights_only=False)
-    except Exception:
-        return fallback
-    if isinstance(blob, dict) and "view" in blob:
-        return blob["view"]
-    return fallback
-
-
-def load_weights(path, network, device):
-    blob = torch.load(path, map_location=device, weights_only=False)
-    network.load_state_dict(blob["state_dict"] if "state_dict" in blob else blob)
 
 
 def setup(self):
@@ -76,13 +46,7 @@ def setup(self):
     torch.set_num_threads(1 if not self.train else int(os.environ.get("DQN_THREADS", 1)))
 
     self.device = torch.device("cpu")
-
-    resume = os.environ.get("DQN_RESUME", "0") == "1"
-    will_load = (not self.train or resume) and MODEL_FILE.is_file()
-    # Ask the checkpoint what shape it needs before building anything.
-    self.view = peek_view(MODEL_FILE, VIEW) if will_load else VIEW
-
-    rows, cols = view_shape(s.ROWS, s.COLS, self.view)
+    rows, cols = view_shape(s.ROWS, s.COLS)
     self.q_network = QNetwork(rows=rows, cols=cols, n_channels=N_CHANNELS).to(self.device)
 
     # DQN_ACTIONS restricts the action space for a curriculum stage, e.g.
@@ -92,9 +56,11 @@ def setup(self):
     self.allowed_actions = [a.strip() for a in allowed if a.strip()]
     self.action_mask = action_mask(self.allowed_actions)
 
-    if will_load:
-        load_weights(MODEL_FILE, self.q_network, self.device)
-        self.logger.info(f"Loaded model from {MODEL_FILE.name} (view {self.view})")
+    resume = os.environ.get("DQN_RESUME", "0") == "1"
+    if (not self.train or resume) and MODEL_FILE.is_file():
+        state_dict = torch.load(MODEL_FILE, map_location=self.device)
+        self.q_network.load_state_dict(state_dict)
+        self.logger.info(f"Loaded model from {MODEL_FILE.name}")
     elif not self.train:
         # Playing with no trained weights is almost certainly a mistake, so say
         # so loudly rather than silently acting on random numbers.
@@ -113,68 +79,24 @@ def setup(self):
     # does not cycle, and the value here should trend to 0 as that improves.
     self.play_epsilon = float(os.environ.get("DQN_PLAY_EPSILON", 0.0))
 
-    # Remove moves the game will reject anyway (walking into a wall, a crate,
-    # another agent or a bomb). This is not the shortcut the spec forbids: it
-    # never says which move is best, it only drops moves that are not moves.
-    # It takes invalid actions to zero and frees the network from spending
-    # capacity on a rule the environment already enforces. Set DQN_LEGAL_MASK=0
-    # for the ablation.
-    self.legal_mask = os.environ.get("DQN_LEGAL_MASK", "1") == "1"
-
-
-def legal_actions(game_state: dict) -> torch.Tensor:
-    """Boolean mask over ACTIONS: which ones the environment would actually
-    carry out. Mirrors environment.perform_agent_action and tile_is_free."""
-    field = game_state["field"]
-    _, _, bombs_left, (x, y) = game_state["self"]
-
-    blocked = {(bx, by) for (bx, by), _ in game_state["bombs"]}
-    blocked |= {pos for _, _, _, pos in game_state["others"]}
-
-    mask = torch.zeros(len(ACTIONS), dtype=torch.bool)
-    for name, (dx, dy) in (("UP", (0, -1)), ("RIGHT", (1, 0)),
-                           ("DOWN", (0, 1)), ("LEFT", (-1, 0))):
-        nx, ny = x + dx, y + dy
-        if field[nx, ny] == 0 and (nx, ny) not in blocked:
-            mask[ACTIONS.index(name)] = True
-    mask[ACTIONS.index("WAIT")] = True
-    if bombs_left:
-        mask[ACTIONS.index("BOMB")] = True
-    return mask
-
-
-def choice_mask(self, game_state: dict) -> torch.Tensor:
-    """The curriculum's allowed actions, narrowed to what is legal here."""
-    mask = self.action_mask
-    if getattr(self, "legal_mask", False):
-        narrowed = mask & legal_actions(game_state)
-        # Boxed in with every allowed move blocked: WAIT rather than pick a
-        # move the environment will reject.
-        mask = narrowed if narrowed.any() else torch.zeros_like(mask).index_fill_(
-            0, torch.tensor([ACTIONS.index("WAIT")]), True)
-    return mask
-
 
 def act(self, game_state: dict) -> str:
     """Pick an action for the current step."""
     if game_state is None:
         return "WAIT"
 
-    mask = choice_mask(self, game_state)
-
     epsilon = getattr(self, "epsilon", 0.0) if self.train else getattr(self, "play_epsilon", 0.0)
     if np.random.rand() < epsilon:
-        choices = [a for i, a in enumerate(ACTIONS) if mask[i]]
-        action = str(np.random.choice(choices))
+        action = str(np.random.choice(self.allowed_actions))
         self.logger.debug(f"Exploring: {action}")
         return action
 
-    features = state_to_features(game_state, self.view)
+    features = state_to_features(game_state)
     with torch.no_grad():
         tensor = torch.from_numpy(features).float().unsqueeze(0).to(self.device)
         q_values = self.q_network(tensor).squeeze(0)
 
-    action = ACTIONS[int(masked_argmax(q_values, mask).item())]
+    action = ACTIONS[int(masked_argmax(q_values, self.action_mask).item())]
     self.logger.debug(f"Q values {q_values.tolist()} -> {action}")
     return action
 
@@ -214,7 +136,7 @@ def danger_map(game_state: dict) -> np.ndarray:
     return danger
 
 
-def state_to_features(game_state: dict, view: str = None) -> np.ndarray:
+def state_to_features(game_state: dict) -> np.ndarray:
     """Turn the game state dict into a (N_CHANNELS, cols, rows) float array.
 
     No hand-crafted pathfinding or situational features here on purpose. The
@@ -242,9 +164,8 @@ def state_to_features(game_state: dict, view: str = None) -> np.ndarray:
 
     channels[5] = danger_map(game_state)
 
-    view = view or VIEW
-    if view.startswith("ego:"):
-        channels = _recentre(channels, (sx, sy), int(view.split(":")[1]))
+    if VIEW.startswith("ego:"):
+        channels = _recentre(channels, (sx, sy), int(VIEW.split(":")[1]))
 
     return channels
 

@@ -128,4 +128,12 @@ agent_code/*/dqn-model.pt
 *.REPLACED-*
 
 # Per-run agent copies created by tools/sweep.py
-agent_code/dqn_[!a]*/
+# Per-run agent copies from tools/sweep.py. The two kept models
+# (dqn_baseline, dqn_global_view) are tracked; their bulky checkpoint
+# folders stay ignored, since experiments/sweep_results.csv holds every
+# number they produced.
+agent_code/dqn_*/
+!agent_code/dqn_agent/
+!agent_code/dqn_baseline/
+!agent_code/dqn_global_view/
+_to_delete/

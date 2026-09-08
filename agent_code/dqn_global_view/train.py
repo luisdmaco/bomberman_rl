@@ -26,8 +26,7 @@ import torch.nn as nn
 import events as e
 import settings as s
 
-from .callbacks import (MODEL_FILE, choice_mask, save_model, state_to_features,
-                        view_shape)
+from .callbacks import MODEL_FILE, state_to_features, view_shape
 from .model import ACTIONS, N_CHANNELS, QNetwork, ReplayBuffer, masked_argmax
 
 LOG_FILE = Path(__file__).parent / "training_log.csv"
@@ -99,7 +98,7 @@ def setup_training(self):
     self.cfg = cfg
     self.buffer = ReplayBuffer(cfg["buffer_size"], rng=random.Random(cfg["seed"] if cfg["seed"] >= 0 else None))
 
-    rows, cols = view_shape(s.ROWS, s.COLS, self.view)
+    rows, cols = view_shape(s.ROWS, s.COLS)
     self.target_network = QNetwork(rows=rows, cols=cols, n_channels=N_CHANNELS).to(self.device)
     self.target_network.load_state_dict(self.q_network.state_dict())
     self.target_network.eval()
@@ -147,8 +146,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str,
     new_features, phi_new = _encode(self, new_game_state)
     reward = _reward(self, events, phi_old, phi_new)
 
-    self.buffer.push(old_features, ACTIONS.index(self_action), new_features, reward,
-                     False, choice_mask(self, new_game_state).numpy())
+    self.buffer.push(old_features, ACTIONS.index(self_action), new_features, reward, False)
     _learn(self)
 
     self.round_steps += 1
@@ -202,14 +200,14 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     if every and self.current_round % every == 0:
         CHECKPOINT_DIR.mkdir(exist_ok=True)
         path = CHECKPOINT_DIR / f"dqn-r{self.current_round:06d}.pt"
-        save_model(path, self.q_network, self.view)
+        torch.save(self.q_network.state_dict(), path)
         self.logger.info(f"Checkpoint {path.name}")
 
     _reset_round_stats(self)
 
 
 def _save(self):
-    save_model(MODEL_FILE, self.q_network, self.view)
+    torch.save(self.q_network.state_dict(), MODEL_FILE)
     self.logger.info(f"Saved model to {MODEL_FILE.name}")
 
 
@@ -226,7 +224,7 @@ def _learn(self):
     if len(self.buffer) < cfg["learn_start"] or self.total_steps % cfg["train_every"] != 0:
         return
 
-    states, actions, next_states, rewards, dones, next_legal = self.buffer.sample(cfg["batch_size"])
+    states, actions, next_states, rewards, dones = self.buffer.sample(cfg["batch_size"])
 
     self.q_network.train()
     q_values = self.q_network(states).gather(1, actions.unsqueeze(1)).squeeze(1)
@@ -238,7 +236,7 @@ def _learn(self):
         # The mask has to be applied here too. Actions the agent is never
         # allowed to take are never trained, so their Q values are noise; left
         # unmasked they would win the argmax and poison every target.
-        best_next = masked_argmax(self.q_network(next_states), next_legal).unsqueeze(1)
+        best_next = masked_argmax(self.q_network(next_states), self.action_mask).unsqueeze(1)
         next_q = self.target_network(next_states).gather(1, best_next).squeeze(1)
         targets = rewards + cfg["gamma"] * next_q * (1.0 - dones)
 
@@ -277,7 +275,7 @@ def _encode(self, game_state: dict):
     """
     if game_state is None:
         return None, 0.0
-    return state_to_features(game_state, self.view), _potential(self, game_state)
+    return state_to_features(game_state), _potential(self, game_state)
 
 
 def _reward(self, events: List[str], phi_old: float, phi_new: float) -> float:

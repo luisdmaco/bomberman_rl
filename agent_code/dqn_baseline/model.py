@@ -41,13 +41,7 @@ def masked_argmax(q_values: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
     """argmax over the last dimension, ignoring disallowed actions."""
     return q_values.masked_fill(~mask, float("-inf")).argmax(dim=-1)
 
-# next_legal: which actions are selectable in the SUCCESSOR state. The Double
-# DQN target takes an argmax over the next state, and actions the agent can
-# never take there carry untrained noise that would win that argmax and
-# poison the target. Legality is per-state, so it has to travel with the
-# transition rather than being a single fixed mask.
-Transition = namedtuple("Transition",
-                        ("state", "action", "next_state", "reward", "done", "next_legal"))
+Transition = namedtuple("Transition", ("state", "action", "next_state", "reward", "done"))
 
 
 class QNetwork(nn.Module):
@@ -113,12 +107,9 @@ class ReplayBuffer:
             return None
         return (np.clip(state, 0.0, 1.0) * cls.SCALE).astype(np.uint8)
 
-    def push(self, state, action, next_state, reward, done, next_legal=None):
-        if next_legal is None:
-            next_legal = np.ones(N_ACTIONS, dtype=bool)
+    def push(self, state, action, next_state, reward, done):
         self.memory.append(
-            Transition(self._pack(state), action, self._pack(next_state), reward,
-                       done, np.asarray(next_legal, dtype=bool))
+            Transition(self._pack(state), action, self._pack(next_state), reward, done)
         )
 
     def sample(self, batch_size: int):
@@ -137,9 +128,7 @@ class ReplayBuffer:
             np.stack([t.next_state if t.next_state is not None else zero for t in batch])
         ).float().div_(self.SCALE)
 
-        next_legal = torch.from_numpy(np.stack([t.next_legal for t in batch]))
-
-        return states, actions, next_states, rewards, dones, next_legal
+        return states, actions, next_states, rewards, dones
 
     def __len__(self):
         return len(self.memory)
