@@ -30,8 +30,8 @@ def get_action_mask(game_state):
         elif danger_at(pos, dmap) == 0:
             mask[action] = False
 
-    # Stay still on a soon-to-explode tile
-    if danger_at((x,y), dmap) == 0:
+    # Never wait inside a blast zone
+    if danger_at((x,y), dmap) is not None:
         mask['WAIT'] = False
 
     # Bomb
@@ -193,6 +193,31 @@ def bfs_direction_and_distance(start, targets, field, bombs, others):
 
     return 'NONE', None # unreachable
 
+# 5. Feature: 
+# finds free tiles touching at least one crate
+def crate_adjacent_free_tiles(field):
+    w, h = field.shape
+    out = []
+
+    for xx in range(1, w-1):
+        for yy in range(1, h-1):
+            if field[xx, yy] != 0:
+                continue
+            if any(field[xx + dx, yy + dy] == 1 for dx, dy in [(1,0),(-1,0),(0,1),(0,-1)]):
+                out.append((xx, yy))
+
+    return out
+
+# 6. Feature: finds free safe tiles, when threatened (to escape bomb)
+def safe_free_tiles(field, bombs, explosion_map):
+
+    dmap = danger_map(field, bombs, explosion_map)
+    w, h = field.shape
+
+    return [(xx, yy) for xx in range(1, w-1) for yy in range(1, h-1)
+            if field[xx, yy] == 0 and (xx, yy) not in dmap]
+
+
 def state_to_features(game_state):
 
     if game_state is None:
@@ -243,13 +268,36 @@ def state_to_features(game_state):
     else:
         coin_dist_feature = [1.0 / (coin_dist + 1)] # closer --> higher value
 
+    # 5. FEATURE: Direction to nearest crate-bombing spot
+    crate_dir, _ = bfs_direction_and_distance(
+        (x, y), crate_adjacent_free_tiles(field), field, bombs, others )
+    crate_dir_features = [1.0 if crate_dir == d else 0.0
+                          for d in ['UP', 'DOWN', 'LEFT', 'RIGHT', 'NONE']]
+
+    # 6. FEATURE: escape danger
+    if danger_at((x,y), dmap) is not None:
+        safe_dir, _ = bfs_direction_and_distance(
+            (x, y), safe_free_tiles(field, bombs, explosion_map), field, bombs, others)
+    else:
+        safe_dir = 'NONE'
+
+    safe_dir_features = [1.0 if safe_dir == d else 0.0 
+                         for d in ['UP', 'DOWN', 'LEFT', 'RIGHT', 'NONE']]
+
+    # 7. FEATURE: How many crates destroy a bomb dropped at (x,y)
+    crates_in_blast = sum(1 for (bx, by) in get_blast_coords(x, y, field) if field[bx, by] == 1)
+    crate_blast_feature = [crates_in_blast / 4.0] 
+
     # --- combine into one fixed-length vector ---
     features = np.array(
         walkable_features +   # 4
         danger_features +     # 5
         bomb_feature +        # 1
         coin_dir_features +   # 5
-        coin_dist_feature,    # 1
+        coin_dist_feature +   # 1
+        crate_dir_features +  # 5
+        safe_dir_features +   # 5
+        crate_blast_feature,  # 1
         dtype=np.float32
     )
 

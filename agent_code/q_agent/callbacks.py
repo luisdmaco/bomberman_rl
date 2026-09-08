@@ -9,6 +9,9 @@ FEATURE_NAMES = [
     'can_bomb',
     'coin_dir_up', 'coin_dir_down', 'coin_dir_left', 'coin_dir_right', 'coin_dir_none',
     'coin_dist',    
+    'crate_dir_up', 'crate_dir_down', 'crate_dir_left', 'crate_dir_right', 'crate_dir_none',
+    'safe_dir_up', 'safe_dir_down', 'safe_dir_left', 'safe_dir_right', 'safe_dir_none',
+    'crates_in_blast',
 ]
 N_FEATURES = len(FEATURE_NAMES)
 
