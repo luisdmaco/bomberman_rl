@@ -110,4 +110,8 @@ screenshots/*.mp4
 screenshots/*.webm
 
 replays/
-results/
+results/ 
+# TODO: compare both models in master later
+
+# extra models of testing
+agent_code/q_agent/old_models/
