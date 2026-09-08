@@ -21,6 +21,13 @@ SCENARIOS = {
         "CRATE_DENSITY": 0.75, 
         "COIN_COUNT": 50 
     }, 
+    # Task-2 curriculum step: crates to blow up, but enough room to escape.
+    # The tournament is "classic" at 0.75; training there from scratch kills the
+    # agent within a few steps, before it collects any experience.
+    "crate-light": {
+        "CRATE_DENSITY": 0.35,
+        "COIN_COUNT": 9
+    },
     # this is the tournament game mode
     "classic": {
         "CRATE_DENSITY": 0.75,

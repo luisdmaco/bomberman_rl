@@ -24,6 +24,9 @@ MODEL_FILE = Path(os.environ.get("DQN_MODEL_FILE") or (Path(__file__).parent / "
 # "ego:N" re-centres an N x N window on the agent, which makes the same local
 # pattern mean the same thing everywhere and turns the task translation
 # invariant. Kept switchable so the report can ablate it.
+# Sentinel for "no bomb threatens this tile".
+SAFE = 99
+
 VIEW = os.environ.get("DQN_VIEW", "ego:13")
 
 
@@ -121,6 +124,13 @@ def setup(self):
     # for the ablation.
     self.legal_mask = os.environ.get("DQN_LEGAL_MASK", "1") == "1"
 
+    # Probability that a random exploratory action is BOMB. Uniform over six
+    # actions would make it 1/6, and on a crate-dense board that kills the agent
+    # within a few steps, so rounds end before any experience accumulates. The
+    # framework's own template agent does the same thing (p=[.2,.2,.2,.2,.1,.1]).
+    # This shapes exploration only; the greedy policy is untouched.
+    self.explore_bomb_p = float(os.environ.get("DQN_EXPLORE_BOMB", 0.10))
+
 
 def legal_actions(game_state: dict) -> torch.Tensor:
     """Boolean mask over ACTIONS: which ones the environment would actually
@@ -164,8 +174,11 @@ def act(self, game_state: dict) -> str:
 
     epsilon = getattr(self, "epsilon", 0.0) if self.train else getattr(self, "play_epsilon", 0.0)
     if np.random.rand() < epsilon:
-        choices = [a for i, a in enumerate(ACTIONS) if mask[i]]
-        action = str(np.random.choice(choices))
+        idx = [i for i in range(len(ACTIONS)) if mask[i]]
+        weights = np.array([self.explore_bomb_p if ACTIONS[i] == "BOMB" else 1.0
+                            for i in idx], dtype=float)
+        weights /= weights.sum()
+        action = ACTIONS[int(np.random.choice(idx, p=weights))]
         self.logger.debug(f"Exploring: {action}")
         return action
 
@@ -179,39 +192,107 @@ def act(self, game_state: dict) -> str:
     return action
 
 
-def danger_map(game_state: dict) -> np.ndarray:
-    """Per-tile lethality, 0.0 (safe) to 1.0 (about to detonate).
+def blast_coords(field, bx, by):
+    """Tiles a bomb at (bx, by) will hit. Stops at stone walls ONLY: the blast
+    passes straight through crates, which is the most common modelling mistake
+    in this framework."""
+    coords = [(bx, by)]
+    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        for step in range(1, s.BOMB_POWER + 1):
+            x, y = bx + dx * step, by + dy * step
+            if not (0 <= x < field.shape[0] and 0 <= y < field.shape[1]):
+                break
+            if field[x, y] == -1:
+                break
+            coords.append((x, y))
+    return coords
 
-    NOTE: the exact bomb-timer indexing must be re-verified against
-    environment.do_step before this is relied on for task 2. It is all zeros in
-    coin-heaven, so gate 1 does not exercise it.
+
+def steps_until_lethal(game_state: dict, extra_bomb=None) -> np.ndarray:
+    """For every tile, how many steps until standing there kills you.
+
+    LETHAL_NOW (0) means the tile kills at the end of THIS step; moving off it
+    now still saves you. SAFE is a large sentinel.
+
+    Timings measured against a live game, not inferred (see experiments/LOG.md,
+    C1 on 2026-09-08):
+
+      step 1  drop            state shows no bomb yet
+      step 2  timer 3         explosion_map 0
+      step 3  timer 2         explosion_map 0
+      step 4  timer 1         explosion_map 0
+      step 5  timer 0         detonates at the end of this step, KILLED_SELF
+      step 6  no bomb         explosion_map 1, still lethal at end of step
+      step 7  no bomb         explosion_map 0, safe
+
+    So a bomb showing timer T is lethal at the end of the step T steps from now,
+    and `explosion_map > 0` means lethal at the end of this step. An agent that
+    sees timer T has T+1 actions (this one included) to get clear.
     """
     field = game_state["field"]
-    danger = np.zeros_like(field, dtype=np.float32)
+    out = np.full(field.shape, SAFE, dtype=np.int16)
 
-    # Explosions already on the board: any nonzero entry is lethal right now.
-    explosion_map = game_state["explosion_map"]
-    danger[explosion_map > 0] = 1.0
+    out[game_state["explosion_map"] > 0] = 0
 
-    for (bx, by), timer in game_state["bombs"]:
-        # Urgency rises as the countdown falls. timer == 0 means it goes off at
-        # the end of this step.
-        urgency = float(s.BOMB_TIMER - timer) / s.BOMB_TIMER
-        urgency = min(max(urgency, 0.1), 1.0)
-        danger[bx, by] = max(danger[bx, by], urgency)
+    bombs = list(game_state["bombs"])
+    if extra_bomb is not None:
+        bombs.append((extra_bomb, s.BOMB_TIMER - 1))
 
-        # Blasts stop at stone walls only. They pass straight through crates,
-        # which is the single most common modelling mistake in this framework.
-        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-            for step in range(1, s.BOMB_POWER + 1):
-                x, y = bx + dx * step, by + dy * step
-                if not (0 <= x < field.shape[0] and 0 <= y < field.shape[1]):
-                    break
-                if field[x, y] == -1:
-                    break
-                danger[x, y] = max(danger[x, y], urgency)
+    for (bx, by), timer in bombs:
+        for (x, y) in blast_coords(field, bx, by):
+            out[x, y] = min(out[x, y], int(timer))
+    return out
 
-    return danger
+
+def danger_map(game_state: dict) -> np.ndarray:
+    """Per-tile lethality as a 0..1 channel, 1.0 = kills at the end of this step.
+
+    Derived from steps_until_lethal, so the encoding is monotone in urgency:
+    timer 3 -> 0.25, timer 2 -> 0.50, timer 1 -> 0.75, timer 0 or a live
+    explosion -> 1.0.
+    """
+    steps = steps_until_lethal(game_state)
+    danger = np.zeros(steps.shape, dtype=np.float32)
+    threatened = steps < SAFE
+    danger[threatened] = (s.BOMB_TIMER - steps[threatened]) / s.BOMB_TIMER
+    return np.clip(danger, 0.0, 1.0)
+
+
+def escape_exists(game_state: dict, from_pos=None, extra_bomb=None) -> bool:
+    """Can the agent reach a tile that will not kill it, in time?
+
+    Walks outward from the agent's position. A tile reached after d moves is
+    survivable only if it is still safe at that moment, i.e. its steps-until-
+    lethal is greater than d. Used to tell a bomb worth dropping from one that
+    is suicide.
+    """
+    field = game_state["field"]
+    start = tuple(from_pos or game_state["self"][3])
+    steps = steps_until_lethal(game_state, extra_bomb=extra_bomb)
+
+    blocked = {(bx, by) for (bx, by), _ in game_state["bombs"]}
+    blocked |= {pos for _, _, _, pos in game_state["others"]}
+
+    seen = {start}
+    frontier = [(start, 0)]
+    budget = s.BOMB_TIMER
+    while frontier:
+        (x, y), d = frontier.pop(0)
+        if steps[x, y] >= SAFE:
+            return True
+        if d >= budget:
+            continue
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if not (0 <= nx < field.shape[0] and 0 <= ny < field.shape[1]):
+                continue
+            if (nx, ny) in seen or field[nx, ny] != 0 or (nx, ny) in blocked:
+                continue
+            # Arriving after d+1 moves: the tile must outlast that.
+            if steps[nx, ny] <= d:
+                continue
+            seen.add((nx, ny))
+            frontier.append(((nx, ny), d + 1))
+    return False
 
 
 def state_to_features(game_state: dict, view: str = None) -> np.ndarray:

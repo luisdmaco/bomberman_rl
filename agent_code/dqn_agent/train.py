@@ -15,6 +15,7 @@ run appends a row per round to training_log.csv for the report's figures.
 import csv
 import os
 import random
+import time
 from collections import deque
 from pathlib import Path
 from typing import List
@@ -26,8 +27,8 @@ import torch.nn as nn
 import events as e
 import settings as s
 
-from .callbacks import (MODEL_FILE, choice_mask, save_model, state_to_features,
-                        view_shape)
+from .callbacks import (MODEL_FILE, SAFE, blast_coords, choice_mask, escape_exists,
+                        save_model, state_to_features, steps_until_lethal, view_shape)
 from .model import ACTIONS, N_CHANNELS, QNetwork, ReplayBuffer, masked_argmax
 
 LOG_FILE = Path(__file__).parent / "training_log.csv"
@@ -75,17 +76,87 @@ CONFIG = {
     "seed": _env("DQN_SEED", -1, int),
 }
 
+# Custom events. The spec is explicit that a dense reward signal beats a sparse
+# one and that "the computational burden of adding rewards is usually not as
+# great as that of adding features", so bomb behaviour is taught through events
+# rather than through hand-built state features.
+GOOD_BOMB = "GOOD_BOMB"                  # will break crates or catch an opponent, and escapable
+USELESS_BOMB = "USELESS_BOMB"            # breaks nothing, hits nobody
+SUICIDAL_BOMB = "SUICIDAL_BOMB"          # no escape route exists from where it was dropped
+ESCAPED_DANGER = "ESCAPED_DANGER"        # was standing somewhere lethal, now is not
+STAYED_IN_DANGER = "STAYED_IN_DANGER"    # was in a blast and still is
+ENTERED_DANGER = "ENTERED_DANGER"        # walked into a blast that was not threatening it before
+CLOSER_TO_SAFETY = "CLOSER_TO_SAFETY"    # in danger, and the blast now goes off later than before
+
 REWARDS = {
     e.COIN_COLLECTED: 1.0,
     e.INVALID_ACTION: -0.5,
-    e.WAITED: -0.2,
-    e.BOMB_DROPPED: -0.5,   # useless and lethal in coin-heaven
-    e.KILLED_SELF: -5.0,
-    e.GOT_KILLED: -5.0,
-    e.CRATE_DESTROYED: 0.0,
+    e.WAITED: -0.05,
+    e.CRATE_DESTROYED: 0.3,
+    e.COIN_FOUND: 0.2,
     e.KILLED_OPPONENT: 5.0,
+    e.KILLED_SELF: -6.0,
+    e.GOT_KILLED: -6.0,
+
+    # Bombs. Paired so the opposites cancel rather than leaving a farmable
+    # positive, which is the trap the spec warns about and which bit us once
+    # already (LOG.md 2026-09-05).
+    GOOD_BOMB: 0.4,
+    USELESS_BOMB: -0.3,
+    SUICIDAL_BOMB: -3.0,     # heavy: this is the single biggest failure mode
+    ESCAPED_DANGER: 0.5,
+    STAYED_IN_DANGER: -0.4,
+    ENTERED_DANGER: -0.6,
+    CLOSER_TO_SAFETY: 0.15,
 }
 STEP_PENALTY = -0.02
+
+
+def _bomb_events(self, old_state, action, new_state, events):
+    """Judge the step's bomb behaviour and append the matching custom events.
+
+    Everything here is a function of the two game states, not of the action
+    taken to reach them, except the bomb verdict itself which needs to know a
+    bomb was dropped. That keeps it close to the spec's advice that auxiliary
+    rewards should depend on states.
+    """
+    extra = []
+    field = old_state["field"]
+    ox, oy = old_state["self"][3]
+
+    if e.BOMB_DROPPED in events:
+        hit = blast_coords(field, ox, oy)
+        crates = sum(1 for (x, y) in hit if field[x, y] == 1)
+        opponents = sum(1 for _, _, _, pos in old_state["others"] if tuple(pos) in hit)
+
+        if not escape_exists(old_state, extra_bomb=(ox, oy)):
+            extra.append(SUICIDAL_BOMB)
+        elif crates or opponents:
+            extra.append(GOOD_BOMB)
+        else:
+            extra.append(USELESS_BOMB)
+
+    if new_state is None:
+        return extra
+
+    was = int(steps_until_lethal(old_state)[ox, oy])
+    nx, ny = new_state["self"][3]
+    now = int(steps_until_lethal(new_state)[nx, ny])
+
+    in_danger_before = was < SAFE
+    in_danger_now = now < SAFE
+
+    if in_danger_before and not in_danger_now:
+        extra.append(ESCAPED_DANGER)
+    elif not in_danger_before and in_danger_now:
+        extra.append(ENTERED_DANGER)
+    elif in_danger_before and in_danger_now:
+        # Both counts are "steps until this tile kills me". A larger number is
+        # further from death, so moving down a blast toward its edge counts as
+        # progress even before the agent is fully clear.
+        extra.append(CLOSER_TO_SAFETY if now > was else STAYED_IN_DANGER)
+
+    return extra
 
 
 def setup_training(self):
@@ -114,14 +185,36 @@ def setup_training(self):
     self.recent_losses = deque(maxlen=500)
     _reset_round_stats(self)
 
-    if not LOG_FILE.exists():
-        with open(LOG_FILE, "w", newline="") as fh:
-            csv.writer(fh).writerow([
-                "round", "steps", "score", "coins", "invalid_actions", "waited",
-                "reward_sum", "epsilon", "mean_loss", "buffer",
-            ])
+    _open_log()
 
     self.logger.info(f"Training config: {cfg}")
+
+
+LOG_COLUMNS = [
+    "round", "steps", "score", "coins", "invalid_actions", "waited",
+    "crates", "good_bombs", "useless_bombs", "suicidal_bombs",
+    "reward_sum", "epsilon", "mean_loss", "buffer",
+]
+
+
+def _open_log():
+    """Start a log the rows will actually line up with.
+
+    The header used to be written only when the file was absent, so adding
+    columns meant appending wider rows under a narrower header and silently
+    corrupting the file. If the existing header does not match, the old log is
+    moved aside rather than overwritten: it is somebody's experiment.
+    """
+    if LOG_FILE.exists():
+        with open(LOG_FILE) as fh:
+            header = fh.readline().strip().split(",")
+        if header == LOG_COLUMNS:
+            return
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        LOG_FILE.rename(LOG_FILE.with_name(f"training_log.{stamp}.csv"))
+
+    with open(LOG_FILE, "w", newline="") as fh:
+        csv.writer(fh).writerow(LOG_COLUMNS)
 
 
 def _reset_round_stats(self):
@@ -130,6 +223,24 @@ def _reset_round_stats(self):
     self.round_invalid = 0
     self.round_waited = 0
     self.round_steps = 0
+    self.round_crates = 0
+    self.round_good_bombs = 0
+    self.round_useless_bombs = 0
+    self.round_suicidal_bombs = 0
+
+
+def _tally(self, events, reward):
+    """Per-round counters. The bomb columns are what tells you whether task 2 is
+    working: suicidal bombs must fall to ~0 and crates must rise."""
+    self.round_steps += 1
+    self.round_reward += reward
+    self.round_coins += events.count(e.COIN_COLLECTED)
+    self.round_invalid += events.count(e.INVALID_ACTION)
+    self.round_waited += events.count(e.WAITED)
+    self.round_crates += events.count(e.CRATE_DESTROYED)
+    self.round_good_bombs += events.count(GOOD_BOMB)
+    self.round_useless_bombs += events.count(USELESS_BOMB)
+    self.round_suicidal_bombs += events.count(SUICIDAL_BOMB)
 
 
 def game_events_occurred(self, old_game_state: dict, self_action: str,
@@ -143,6 +254,8 @@ def game_events_occurred(self, old_game_state: dict, self_action: str,
         _reset_round_stats(self)
         _update_epsilon(self)
 
+    events = events + _bomb_events(self, old_game_state, self_action, new_game_state, events)
+
     old_features, phi_old = _encode(self, old_game_state)
     new_features, phi_new = _encode(self, new_game_state)
     reward = _reward(self, events, phi_old, phi_new)
@@ -151,11 +264,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str,
                      False, choice_mask(self, new_game_state).numpy())
     _learn(self)
 
-    self.round_steps += 1
-    self.round_reward += reward
-    self.round_coins += events.count(e.COIN_COLLECTED)
-    self.round_invalid += events.count(e.INVALID_ACTION)
-    self.round_waited += events.count(e.WAITED)
+    _tally(self, events, reward)
 
 
 def end_of_round(self, last_game_state: dict, last_action: str, events: List[str]):
@@ -168,17 +277,14 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     died = e.KILLED_SELF in events or e.GOT_KILLED in events
 
     if last_game_state is not None and last_action is not None:
+        events = events + _bomb_events(self, last_game_state, last_action, None, events)
         last_features, phi_last = _encode(self, last_game_state)
         reward = _reward(self, events, phi_last, 0.0 if died else phi_last)
         if died:
             self.buffer.push(last_features, ACTIONS.index(last_action), None, reward, True)
             _learn(self)
 
-        self.round_steps += 1
-        self.round_reward += reward
-        self.round_coins += events.count(e.COIN_COLLECTED)
-        self.round_invalid += events.count(e.INVALID_ACTION)
-        self.round_waited += events.count(e.WAITED)
+        _tally(self, events, reward)
 
     score = last_game_state["self"][1] if last_game_state else 0
     mean_loss = float(np.mean(self.recent_losses)) if self.recent_losses else 0.0
@@ -186,13 +292,17 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     with open(LOG_FILE, "a", newline="") as fh:
         csv.writer(fh).writerow([
             self.current_round, self.round_steps, score, self.round_coins,
-            self.round_invalid, self.round_waited, round(self.round_reward, 3),
+            self.round_invalid, self.round_waited, self.round_crates,
+            self.round_good_bombs, self.round_useless_bombs, self.round_suicidal_bombs,
+            round(self.round_reward, 3),
             round(self.epsilon, 4), round(mean_loss, 5), len(self.buffer),
         ])
 
     self.logger.info(
         f"Round {self.current_round}: score {score}, coins {self.round_coins}, "
-        f"invalid {self.round_invalid}, eps {self.epsilon:.3f}, loss {mean_loss:.4f}"
+        f"crates {self.round_crates}, bombs good/useless/suicidal "
+        f"{self.round_good_bombs}/{self.round_useless_bombs}/{self.round_suicidal_bombs}, "
+        f"eps {self.epsilon:.3f}, loss {mean_loss:.4f}"
     )
 
     if self.current_round % self.cfg["save_every"] == 0:

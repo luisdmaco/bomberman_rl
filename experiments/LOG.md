@@ -6,13 +6,30 @@ newest first.
 
 ---
 
-## STATUS (2026-09-06, confirmed)
+## STATUS (2026-09-08)
 
-**GATE 1 PASSED.** `baseline` @ 250 rounds: 46.06 coins, 95% CI [45.5, 46.7],
-0 invalid actions, over 200 evaluation rounds with training off.
+Task 1 passed. **Task 2 is set up and verified but not yet trained.** 13 days to
+the code deadline, 9 to the crash test.
 
-| config | @rounds | coins | 95% CI | steps | invalid | gate 1 |
-|---|---|---|---|---|---|---|
+| | Coins per round |
+|---|---|
+| `rule_based_agent` | 50.0 |
+| best frozen DQN (global_view @ 2750) | 47.4 in 234 steps |
+| gate-1 pass (baseline @ 250) | 46.06, CI [45.5, 46.7], 0 invalid |
+| random walk | ~18 |
+
+Two models kept, four discarded (moved to `_to_delete/`, safe to `rm -rf`).
+
+Run next, on the gentler board first:
+
+```
+DQN_VIEW="ego:13" DQN_EPS_DECAY=1500 python tools/train_curve.py \
+  --rounds 3000 --checkpoint-every 250 --eval-rounds 40 --scenario crate-light
+```
+
+Watch `suicidal_bombs` and `crates` in `training_log.csv`, not coins.
+
+---|---|---|---|---|---|---|
 | global_view | 2750 | 47.39 | [46.5, 48.3] | 234 | 3.19 | marginal |
 | baseline | 250 | 46.06 | [45.5, 46.7] | 351 | 0.00 | **PASS** |
 | lr_2e4 | 250 | 45.92 | [45.1, 46.8] | 346 | 1.88 | marginal |
@@ -102,11 +119,31 @@ deliberately for the report's ablation).
 
 # Part 1 — How this works
 
-## The task
+## The tasks and their gates
 
-Scenario `coin-heaven`: a 17x17 board, no crates, no opponents, 50 coins all
-visible from step 1, 400 steps to collect them. Pure navigation. No bombs
-needed, so we mask the BOMB action out during this stage.
+**Task 1, `coin-heaven`.** 17x17 board, no crates, no opponents, 50 coins all
+visible from step 1, 400 steps. Pure navigation; no bomb is needed, so BOMB is
+masked out for this stage.
+Gate: 45 of 50 coins with the whole confidence interval above it, and zero
+invalid actions. **PASSED** 2026-09-06.
+
+**Task 2, `crate-light` then `classic`.** Crates to blow up, still no opponents.
+The agent has to open crates and never blow itself up. The spec calls escaping
+bombs crucial and says most tournament losses are self-inflicted.
+Gate: suicide rate under 2% over 200 rounds, and 8 of 9 coins on average.
+`crate-light` (density 0.35) is a curriculum step we added; `classic` (0.75) is
+the tournament setting.
+Status: set up and verified, not trained.
+
+**Task 3.** Against `peaceful_agent` and `coin_collector_agent`.
+Gate: kills the peaceful agent in 80% of rounds; positive margin vs the coin
+collector. Not started.
+
+**Task 4.** Against `rule_based_agent` and self-play.
+Gate: mean score above `rule_based_agent` over 200 rounds. Not started.
+
+For task 2 onward, **coins are the wrong thing to watch.** Track
+`suicidal_bombs` and `crates`.
 
 ## The pipeline
 
@@ -191,8 +228,21 @@ scores.
 | `agent_code/dqn_agent/training_log.csv` | One row per round **during** training | For debugging only. NOT a learning curve. |
 | `agent_code/dqn_agent/eval_curve.csv` | Frozen model measured at each checkpoint | **Yes. This is the real curve.** |
 | `agent_code/dqn_agent/checkpoints/dqn-rNNNNNN.pt` | Weights snapshot at round NNNNNN | The raw material for the curve |
-| `agent_code/dqn_agent/dqn-model.pt` | Latest weights | What gets submitted |
+| `agent_code/dqn_agent/dqn-model.pt` | Working copy the game loads | Overwritten by any training run. Not an archive. |
+| `models/*.pt` | **The measured models, tracked in git** | The only copies that survive a clean checkout |
 | `agent_code/dqn_agent/logs/dqn_agent.log` | Every action and its Q values | For diagnosing weird behaviour |
+
+## The tools
+
+| Script | What it does |
+|---|---|
+| `tools/evaluate.py` | Measures one agent frozen, against a gate. Works on any agent, not just the DQN. |
+| `tools/train_curve.py` | One continuous training run with checkpoints, then an honest frozen curve from them. |
+| `tools/compare.py` | Evaluates every sweep configuration frozen, in parallel, into one table. Applies each config's own settings, so a global-view model is not evaluated with an egocentric network. |
+| `tools/confirm.py` | Re-measures the leaders over 200 rounds instead of 40, and only calls PASS when the whole interval clears the bar. |
+| `tools/sweep.py` | Runs several configurations at once, one core each. |
+| `tools/watch_sweep.py` | Progress of a running sweep, read off disk from another terminal. |
+| `tools/profile_step.py` | Where a training round's time actually goes. |
 
 ## Reading `eval_curve.csv`
 
@@ -213,14 +263,57 @@ A flat `frozen_coins` means it is not learning. A `mean_steps` stuck at exactly
 
 Useful for debugging, misleading as a result.
 
-`round, steps, score, coins, invalid_actions, waited, reward_sum, epsilon, mean_loss, buffer`
+```
+round, steps, score, coins, invalid_actions, waited,
+crates, good_bombs, useless_bombs, suicidal_bombs,
+reward_sum, epsilon, mean_loss, buffer
+```
 
-The two columns to actually check here:
+Health checks, worth a glance on any run:
 
 - `epsilon` should fall smoothly from 1.0 to 0.05 across the whole run. If it
   jumps back up, something restarted. That was bug #2.
 - `buffer` should climb to 50000 and stay. If it drops back to ~400, the replay
   memory got wiped. Same bug.
+- `invalid_actions` should be 0 from round 1 with legal-move masking on. Anything
+  else means `DQN_LEGAL_MASK=0` or a bug in `legal_actions`.
+
+For task 2, these are the ones that matter:
+
+- `suicidal_bombs` must fall toward 0. It counts bombs dropped where no escape
+  route existed, judged before the agent moves, so it is not just "died".
+- `crates` must rise. Together they say "learned to bomb usefully and live".
+- `good_bombs` versus `useless_bombs` says whether it is bombing on purpose.
+
+If the header ever disagrees with the rows, the file was written by an older
+version; `setup_training` now rotates a mismatched log aside rather than
+appending wider rows under a narrower header.
+
+## Every switch
+
+Set on the command line; nothing needs a source edit. Official games set no
+environment at all, so every default here must be the one we want to ship.
+
+| Variable | Default | Effect |
+|---|---|---|
+| `DQN_VIEW` | `ego:13` | `global` for the whole board. **Stored inside the checkpoint**, so a saved model rebuilds its own architecture. |
+| `DQN_ACTIONS` | all six | Curriculum restriction, e.g. `UP,RIGHT,DOWN,LEFT` for task 1. |
+| `DQN_LEGAL_MASK` | `1` | Drop moves the game would reject. `0` for the ablation. |
+| `DQN_EXPLORE_BOMB` | `0.10` | Probability a random exploratory action is BOMB. Shapes exploration only. |
+| `DQN_GAMMA` | `0.95` | Discount. |
+| `DQN_LR` | `5e-4` | Adam learning rate. |
+| `DQN_BATCH` / `DQN_TRAIN_EVERY` | `128` / `16` | Batch size and update interval. Their ratio is the replay ratio. |
+| `DQN_BUFFER` / `DQN_LEARN_START` | `50000` / `2000` | Replay capacity, and transitions before the first update. |
+| `DQN_TARGET_UPDATE` | `1000` | Gradient steps between target syncs. |
+| `DQN_EPS_START` / `DQN_EPS_END` / `DQN_EPS_DECAY` | `1.0` / `0.05` / `400` | Set decay to about half the rounds. |
+| `DQN_SHAPING` | `1` | `0` for the ablation. |
+| `DQN_SHAPING_SCALE` / `_GAMMA` / `_CAP` | `0.05` / `1.0` / `10` | See 2026-09-05: the discounted, uncapped version paid the agent to idle. |
+| `DQN_CHECKPOINT_EVERY` | `0` | Numbered snapshots. The curve tools set it. |
+| `DQN_MODEL_FILE` | agent's own | Point evaluation at one specific checkpoint. |
+| `DQN_RESUME` | `0` | Continue from existing weights. |
+| `DQN_PLAY_EPSILON` | `0.0` | Noise at play time. A patch, not a fix. |
+| `DQN_THREADS` | `1` | One thread per process; run processes in parallel instead. |
+| `DQN_SEED` | `-1` | Set for a reproducible run. |
 
 ## The commands
 
@@ -249,6 +342,125 @@ over the first half and the second half exploits.
 ---
 
 # Part 2 — Log
+
+## 2026-09-08 — Task 2 groundwork, and two things measured rather than assumed
+
+### Bomb timing, measured against a live game
+
+The danger channel had never run with a real bomb on the board. Rather than
+re-read the code, a probe agent dropped one and recorded what it saw:
+
+```
+step 1  drop            state shows no bomb yet
+step 2  timer 3         explosion_map 0
+step 3  timer 2         explosion_map 0
+step 4  timer 1         explosion_map 0
+step 5  timer 0         detonates at the end of this step, KILLED_SELF
+step 6  no bomb         explosion_map 1, still lethal at end of step
+step 7  no bomb         explosion_map 0, genuinely safe
+```
+
+So: **a bomb showing timer T is lethal at the end of the step T steps from now**,
+and `explosion_map > 0` means lethal at the end of THIS step. Seeing timer T
+leaves T+1 actions to get clear. An explosion is visible and lethal for exactly
+one step, not two.
+
+The old danger map was directionally right. It is now derived from an explicit
+`steps_until_lethal` grid with those semantics written down.
+
+### Escape detection
+
+`escape_exists(state, extra_bomb=...)` walks outward and asks whether a tile
+that is still safe on arrival can be reached in time. Unit-tested on hand-built
+boards: dead ends of 3 and 4 tiles fail, a straight corridor passes (a tile 4
+away is already outside a power-3 blast and reachable in 4 moves), a corner at
+distance 2 passes, and a corridor whose exit is blocked by a second bomb fails.
+
+One test of mine was wrong before the code was: I expected a corner 5 tiles away
+to be unreachable, forgetting `BOMB_POWER` is 3, so tile 4 is already safe. The
+code was right.
+
+### Bomb events and rewards
+
+Following the spec's advice, and Daniela's, that dense rewards beat features and
+cost far less: `GOOD_BOMB` (+0.4), `USELESS_BOMB` (-0.3), `SUICIDAL_BOMB` (-3.0),
+`ESCAPED_DANGER` (+0.5), `ENTERED_DANGER` (-0.6), `STAYED_IN_DANGER` (-0.4),
+`CLOSER_TO_SAFETY` (+0.15). Paired so opposites cancel rather than leaving a
+farmable positive, which is the trap that bit us on 2026-09-05.
+
+Verified the classifier discriminates rather than labelling everything:
+
+| scenario | good | useless | suicidal | crates/round |
+|---|---|---|---|---|
+| `empty` (open board) | 0 | 2 | 0 | 0.0 |
+| `loot-crate` (75% crates) | 1 | 0 | 5 | 3.2 |
+
+Open board: every bomb escapable and pointless. Cramped board: most bombs are
+genuine suicide. `training_log.csv` now has `crates`, `good_bombs`,
+`useless_bombs` and `suicidal_bombs` columns.
+
+### Legal-move masking (from block B)
+
+Illegal moves are removed from the argmax and from exploration. Effect measured
+from scratch at epsilon 1.0: **0 invalid actions from the first round** (against
+~145 for the old random walk) and 23-28 coins while acting entirely at random
+(against ~18). Better random exploration means better data in the buffer.
+
+Because legality is per-state, each transition now stores the successor's legal
+mask; without it, untrained noise on illegal actions wins the Double DQN argmax
+and poisons the targets, the same failure as the curriculum mask earlier.
+
+Ablation switch: `DQN_LEGAL_MASK=0`.
+
+### Two changes that made task 2 trainable at all
+
+Uniform exploration picks BOMB one time in six, which on a crate-dense board
+kills the agent in 3-5 steps, before any experience accumulates. This is bug 0
+in a new costume.
+
+1. `DQN_EXPLORE_BOMB` (default 0.10) weights BOMB down during exploration only.
+   The framework's own template agent does the same. The greedy policy is
+   untouched.
+2. A `crate-light` scenario (density 0.35 against the tournament's 0.75) as a
+   curriculum step.
+
+Measured effect, 8 rounds from scratch:
+
+| scenario | mean steps | crates/round | suicidal bombs/round |
+|---|---|---|---|
+| `crate-light` | 42 | 1.6 | 0.0 |
+| `loot-crate` | 26 | 3.5 | 0.4 |
+
+Against 3-5 steps before. Note `settings.py` changes do not ship with the agent,
+so the tournament is unaffected; the spec explicitly permits custom scenarios.
+
+### The view now travels inside the checkpoint
+
+`DQN_VIEW` was read from an environment variable the tournament never sets, so a
+global-view model would have been given an egocentric architecture and failed to
+load. Checkpoints now store `{"view": ..., "state_dict": ...}` and `setup` reads
+the view before building the network. Verified by saving a global-view model,
+clearing the environment, and loading it as the tournament would. Old bare
+checkpoints still load via a fallback.
+
+### Housekeeping
+
+`dqn_batch32`, `dqn_lr_2e4`, `dqn_no_shaping` and `dqn_old_shaping` moved to
+`_to_delete/`. Their numbers survive in `experiments/sweep_results.csv`, so
+nothing is lost by removing them.
+
+`.gitignore` now ignores `agent_code/dqn_*/` but un-ignores `dqn_agent`,
+`dqn_baseline` and `dqn_global_view`. Their source and the two winning model
+files are tracked (about 4 MB); the 24 remaining checkpoint files are not.
+
+`.vscode/launch.json` has five run configurations, including a "Submission
+check" that runs with an empty environment exactly as the tournament will.
+
+### Still not done
+
+Nothing is trained on task 2 yet. The `danger` channel is now correct but the
+network has never seen it nonzero during training.
+
 
 ## 2026-09-06 (confirmed) — Gate 1 passed
 
