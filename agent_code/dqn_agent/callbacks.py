@@ -124,6 +124,39 @@ def setup(self):
     # for the ablation.
     self.legal_mask = os.environ.get("DQN_LEGAL_MASK", "1") == "1"
 
+    # Remove BOMB when the agent could not survive its own blast. Same argument
+    # as the legal mask, one step further: it never says a bomb is a good idea,
+    # it only drops the case where the framework's own rules make the move a
+    # certain death four steps later.
+    #
+    # Measured need for this, on the r3000 crate-light model: 15% of frozen
+    # rounds ended in suicide, 85% of those deaths landed on step 5 to 7 (the
+    # first bomb), and on 2000 generated boards the opening corner bomb is
+    # unescapable 22% of the time while the greedy policy drops it anyway on
+    # 9.3% of all boards. SUICIDAL_BOMB (-3.0) was supposed to teach this and
+    # after 3000 rounds still got it wrong 42% of the time, because the state is
+    # uncommon, the punishment arrives four steps late, and the same action is
+    # correct on the other 78% of boards.
+    #
+    # PLAY TIME ONLY, and that is a measured decision, not a detail. Training
+    # with the mask on removes every SUICIDAL_BOMB experience, and an agent that
+    # never sees one never learns to be careful with the bombs the mask *does*
+    # allow. Two 3000-round runs differing only in this, both evaluated masked
+    # over 300 rounds:
+    #
+    #   checkpoint  trained unmasked      trained masked
+    #   r2500       4.03 coins,  7.7%     3.99 coins, 24.3%
+    #   r2750       5.88 coins,  9.0%     5.96 coins, 21.0%
+    #   r3000       6.94 coins,  5.7%     6.55 coins, 11.3%
+    #
+    # Coin collection is identical at every checkpoint; the suicide rate is two
+    # to three times worse for the shielded agent. So the deaths are the
+    # teaching signal, and the mask is a play-time safety net over a policy that
+    # learned bomb safety the hard way. Override either default explicitly with
+    # DQN_SUICIDE_MASK=0/1 for the ablation.
+    self.suicide_mask = os.environ.get(
+        "DQN_SUICIDE_MASK", "0" if self.train else "1") == "1"
+
     # Probability that a random exploratory action is BOMB. Uniform over six
     # actions would make it 1/6, and on a crate-dense board that kills the agent
     # within a few steps, so rounds end before any experience accumulates. The
@@ -154,14 +187,28 @@ def legal_actions(game_state: dict) -> torch.Tensor:
 
 
 def choice_mask(self, game_state: dict) -> torch.Tensor:
-    """The curriculum's allowed actions, narrowed to what is legal here."""
+    """The curriculum's allowed actions, narrowed to what is legal and survivable.
+
+    Applies to exploration as well as to the greedy argmax, which is the point:
+    a random exploratory bomb with no escape ends the round and teaches nothing.
+    """
     mask = self.action_mask
     if getattr(self, "legal_mask", False):
-        narrowed = mask & legal_actions(game_state)
-        # Boxed in with every allowed move blocked: WAIT rather than pick a
-        # move the environment will reject.
-        mask = narrowed if narrowed.any() else torch.zeros_like(mask).index_fill_(
-            0, torch.tensor([ACTIONS.index("WAIT")]), True)
+        mask = mask & legal_actions(game_state)
+
+    bomb = ACTIONS.index("BOMB")
+    if mask[bomb] and getattr(self, "suicide_mask", False):
+        # One BFS bounded by BOMB_TIMER, against a 500 ms per-step budget and a
+        # measured 1 ms decision time.
+        if not escape_exists(game_state, extra_bomb=tuple(game_state["self"][3])):
+            mask = mask.clone()
+            mask[bomb] = False
+
+    # Boxed in with every allowed action removed: WAIT rather than pick a move
+    # the environment will reject.
+    if not mask.any():
+        mask = torch.zeros_like(mask)
+        mask[ACTIONS.index("WAIT")] = True
     return mask
 
 

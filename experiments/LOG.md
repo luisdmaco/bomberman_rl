@@ -6,146 +6,38 @@ newest first.
 
 ---
 
-## STATUS (2026-09-09, evening)
+## STATUS (2026-09-09, three task-2 runs in)
 
-Task 1 passed. Task 2 trained once and scored **0.0 coins**; cause found and
-four reward fixes applied, **not yet retrained**. 12 days to the code deadline,
-8 to the crash test.
+Task 2 best agent: **run 1 @ r3000 played with the suicide mask, 6.94 coins and
+5.67% suicide** over 300 frozen rounds. Gate is 8 coins and 2%. Both still
+climbing steeply when the runs ended, so the next thing is simply a longer run.
+12 days to the code deadline, 8 to the crash test.
 
 | | |
 |---|---|
 | Task 1 best (frozen) | 47.39 coins in 234 steps |
 | Task 2 gate | suicide rate < 2%, 8 of 9 coins |
-| Task 2 last measured | 0.0 coins, 0 invalid, ~0.05 suicidal, 400 steps |
+| Task 2 best (run1 r3000 + mask, 300 rounds) | **6.94 coins**, **5.67% suicide**, 0 invalid |
+| ... in rounds where it survives | 7.27 coins, 52% reach 8 or more |
 
-The agent was not failing to learn. Under the old rewards, doing nothing scored
--0.32 and bombing two crates scored -0.75, so not bombing was strictly correct.
-After the fixes those are -0.32 and +2.35.
+**The one thing that has changed conceptually:** the suicide mask is now
+play-time only. Training with it on measurably hurts. See the third
+2026-09-09 entry.
 
-Run next:
+Weights are archived as `models/task2-run1-r3000-ego13.pt`. Run 3 overwrote
+`checkpoints/` and `dqn-model.pt`, so that archive is the only copy.
 
-```
-DQN_VIEW="ego:13" DQN_EPS_DECAY=1500 python tools/train_curve.py \
-  --rounds 3000 --checkpoint-every 250 --eval-rounds 40 --scenario crate-light
-```
-
-Watch `crates` and `suicidal_bombs`. Crates must keep rising after epsilon
-anneals at round 1500; last time they collapsed there.
-
----|---|
-| Task 1 best (frozen) | 47.39 coins in 234 steps |
-| Task 2 gate | suicide rate < 2%, 8 of 9 coins |
-| Task 2 now | **0.0 coins**, 0 invalid, ~0.05 suicidal bombs, 400 steps |
-
-The agent learned to survive by not bombing. Crates peaked at 3.2/round while
-exploration forced bombs (epsilon 0.24) and collapsed to 1.2 once greedy.
-
-**Root cause: the reward shaping is inert on a crate board.** See the 2026-09-09
-entry. Do not run more task-2 training until it is fixed; the result will be the
-same.
-
----|---|
-| `rule_based_agent` | 50.0 |
-| best frozen DQN (global_view @ 2750) | 47.4 in 234 steps |
-| gate-1 pass (baseline @ 250) | 46.06, CI [45.5, 46.7], 0 invalid |
-| random walk | ~18 |
-
-Two models kept, four discarded (moved to `_to_delete/`, safe to `rm -rf`).
-
-Run next, on the gentler board first:
+**Run this next.** Longer, and the mask now switches itself off for training:
 
 ```
-DQN_VIEW="ego:13" DQN_EPS_DECAY=1500 python tools/train_curve.py \
-  --rounds 3000 --checkpoint-every 250 --eval-rounds 40 --scenario crate-light
+DQN_VIEW="ego:13" DQN_EPS_DECAY=3000 python tools/train_curve.py \
+  --rounds 6000 --checkpoint-every 250 --eval-rounds 40 --scenario crate-light
 ```
 
-Watch `suicidal_bombs` and `crates` in `training_log.csv`, not coins.
-
----|---|---|---|---|---|---|
-| global_view | 2750 | 47.39 | [46.5, 48.3] | 234 | 3.19 | marginal |
-| baseline | 250 | 46.06 | [45.5, 46.7] | 351 | 0.00 | **PASS** |
-| lr_2e4 | 250 | 45.92 | [45.1, 46.8] | 346 | 1.88 | marginal |
-| old_shaping | 250 | 45.16 | [44.4, 45.9] | 364 | 0.00 | marginal |
-| no_shaping | 500 | 44.55 | [43.6, 45.5] | 369 | 0.01 | fail |
-
-Reference: `rule_based_agent` 50.0 in 125 steps; random walk ~18.
-
-**Carry `global_view` @ 2750 forward, not the gate-passing checkpoint.** It
-scores higher (47.4 vs 46.1), clears the board in 234 steps against 351, and is
-the only configuration that improves with training rather than decaying. Its
-3.19 invalid actions per round is a blemish to fix, not a reason to discard it.
-`baseline` @ 250 is a very early checkpoint that peaked while epsilon was still
-0.84 and then degraded; it wins the gate on a technicality (the zero-invalid
-clause, which I invented, is not in the project spec).
-
-### Before task 2
-
-1. **`DQN_VIEW` must not stay an environment variable for the submitted agent.**
-   Official games set no environment. If a global-view model ships, the default
-   in `callbacks.py` has to become `"global"` or the network is built with the
-   wrong shape and cannot load its own weights.
-2. **Remove `DQN_ACTIONS`.** Task 2 needs BOMB.
-3. **The `danger` channel has never been exercised.** It is all zeros in
-   coin-heaven. Re-verify the bomb-timer indexing against `environment.do_step`
-   before anything depends on it.
-4. **Fix the divergence** or adopt "keep the best checkpoint, not the last".
-   Most configs lose 30% of their performance between round 250 and round 3000.
-
----|---|
-| `rule_based_agent` | 50.0 |
-| **best frozen DQN** | **47.9** (global_view @ 2750) |
-| Gate 1 target | 45 |
-| Random walk | ~18 |
-| Everything before the cache fix | 3 to 5 (void) |
-
-Run next:
-
-```
-python tools/confirm.py --n-rounds 200 --top 5
-```
-
-Two findings that reverse earlier assumptions, both in the 2026-09-06 entry:
-the **global** view beats the egocentric one, and my shaping "fix" made things
-worse than the version I called broken.
-
----|---|
-| `rule_based_agent` | 50.0 |
-| **Gate 1 target** | **45** |
-| Random walk | ~18 |
-| Everything measured so far | 3 to 5 (void, see above) |
-
-Next run: re-run the sweep with the fix.
-
-```
-python tools/sweep.py --rounds 3000 --jobs 6
-python tools/compare.py --eval-rounds 40 --jobs 6
-```
-
----|---|---|
-| `rule_based_agent` | 50.0 | The ceiling. Collects everything in ~125 steps. |
-| **Gate 1 target** | **45** | What we need. |
-| Random walk | ~18 | The floor. Wandering blindly still finds coins. |
-| Our frozen DQN | ~4 to 5 | Where we actually are. |
-| Our DQN, measured wrong | 45 | An illusion. See entry 2026-09-03. |
-
-Two tooling bugs found and fixed so far. Neither was a modelling problem, both
-were measurement or plumbing problems, and both made the numbers lie.
-
-3000 clean rounds produced no learning: frozen coins wandered between 2.6 and
-6.2 with no trend, and `mean_steps` was exactly 400.0 at every checkpoint, so
-the board was never cleared. `invalid_per_round` did fall to ~0, so the network
-was learning wall avoidance. Cause found: the reward function. See the
-2026-09-05 entry.
-
-Next run to do, now that the reward is fixed:
-
-```
-python tools/sweep.py --rounds 3000 --jobs 6
-```
-
-Six configs in parallel, one core and ~100 MB each. The decisive comparison is
-`baseline` (fixed shaping) vs `no_shaping` vs `old_shaping` (the bug, kept
-deliberately for the report's ablation).
+Roughly 90 minutes. Both runs so far gained about 1 coin per 250 rounds over
+their last 750 and had not levelled off, so doubling the budget is the cheapest
+remaining lever. `frozen_coins` in `eval_curve.csv` is the column to watch;
+there is no column called `coins`.
 
 ---
 
@@ -374,6 +266,211 @@ over the first half and the second half exploits.
 ---
 
 # Part 2 — Log
+
+## 2026-09-09 (night, 3) — Training with the shield on makes the agent worse
+
+Retrained 3000 rounds on `crate-light`, identical to the previous run except
+that `choice_mask` was masking unescapable bombs throughout. The mask worked
+exactly as designed: `suicidal_bombs` is **0 across all 3000 rounds** (it was
+0.11 per round before) and invalid actions stayed at 0.
+
+It did not help. Both runs evaluated masked, 300 frozen rounds each:
+
+| checkpoint | trained *unmasked* (run 1) | trained *masked* (run 3) |
+|---|---|---|
+| r2500 | 4.03 coins, **7.67%** suicide | 3.99 coins, **24.33%** |
+| r2750 | 5.88 coins, **9.00%** | 5.96 coins, **21.00%** |
+| r3000 | 6.94 coins, **5.67%** | 6.55 coins, **11.33%** |
+
+Coin collection is statistically identical at every checkpoint. The suicide rate
+is two to three times worse for the shielded agent, at every checkpoint.
+
+**Why.** The mask only blocks bombs with *no* escape. It does nothing about a
+bomb whose escape exists but is a precise four-move sequence. Run 1 learned
+caution about those the hard way, by dying, and that caution transfers. Run 3
+never saw a single suicidal bomb, so it learned nothing about bomb safety at
+all, and leans on a shield that does not cover the case it actually fails on.
+
+This is the shielded-RL failure mode in miniature: shield during training and
+you get a policy that depends on the shield rather than one that has learned the
+constraint. It is worth a paragraph in the report, because it is a result rather
+than an anecdote: two runs, one variable, three checkpoints, 300 evaluation
+rounds each, and the coin axis controls for "run 3 is simply behind".
+
+**Change.** `DQN_SUICIDE_MASK` now defaults to off during training and on at
+play time, with the explicit override kept for the ablation. The deaths are the
+teaching signal; the mask is a safety net over a policy that already learned
+most of the lesson.
+
+Run 3's model files are kept but are not the best agent. Note that run 3
+overwrote `checkpoints/` and `dqn-model.pt`, so run 1's r3000 weights survive
+only as `models/task2-run1-r3000-ego13.pt`.
+
+### Also worth recording
+
+Neither run has converged. Both gained roughly a coin per 250 rounds over their
+last 750 rounds and neither levelled off. Every diagnosis so far has been a
+reward or masking bug, so it is worth stating plainly that the next step is not
+another bug hunt: it is 6000 rounds instead of 3000.
+
+
+## 2026-09-09 (night, 2) — Masking unescapable bombs, measured before retraining
+
+`choice_mask` now removes `BOMB` when `escape_exists` is false, alongside the
+existing legal-move mask. `DQN_SUICIDE_MASK=0` for the ablation. The check is
+one BFS bounded by `BOMB_TIMER`; measured decision time went from 1.00 to
+1.01 ms against a 500 ms budget.
+
+### It was worth measuring before retraining
+
+Same weights, same 300 frozen rounds on `crate-light`, only the mask changed:
+
+| r3000 | coins | steps | suicide | reach 8+ | invalid | ms/step |
+|---|---|---|---|---|---|---|
+| mask off (as trained) | 6.49 +/-0.34 | 340.5 | 15.67% | 51.3% | 0.00 | 1.00 |
+| **mask on** | **7.05 +/-0.24** | **382.2** | **4.33%** | 53.7% | 0.00 | 1.01 |
+
+A third of the remaining gap to the gate closed without a single training step.
+That is worth remembering as a method: the policy was not wrong about where to
+bomb, it was wrong about one narrow class of state that could be excluded
+outright.
+
+On the 2000-board opening probe the mask does exactly what it should and nothing
+more: the fatal opening bomb goes from 9.30% of boards to **0.00%**, while the
+38.85% of boards where the agent correctly opens with a bomb are untouched.
+
+### What is left
+
+Residual deaths over 600 rounds: **6.17%**, at steps
+`[6 x7, 12, 12, 19, 20, 21, 28, 30, ..., 155, 225]`. Seven are still the first
+bomb, but these are cases where an escape *existed* at drop time and the agent
+failed to walk it. The rest are spread evenly through the round. So the mask
+removed the provably impossible class and what remains is a real learning
+problem, which is the right kind of problem to have.
+
+### The caveat, stated plainly for the report
+
+This is a hand-coded rule, not a learned one, and with it on `SUICIDAL_BOMB`
+(-3.0) can never fire during training. That is deliberate. The argument is the
+same one that justifies the legal-move mask: it encodes a rule the framework
+already enforces rather than a strategy, and it never says a bomb is a good
+idea, only that this particular bomb is a certain death. The ablation switch
+exists so the report can show the difference rather than assert it.
+
+The counter-argument is real and should be acknowledged: an agent that needs the
+mask has not learned bomb safety, it has been given it. The 3000-round evidence
+is that it does not learn it on its own (42% error rate on the fatal openings
+after a full run), because the state is uncommon, the punishment lands four
+steps late, and the same action is correct on the other 78% of boards.
+
+
+## 2026-09-09 (night) — The reward fixes worked; the deaths are the opening move
+
+**Result.** Same command, same 3000 rounds on `crate-light`, only the reward
+function changed. Frozen evaluation went from 0.0 coins to 6.62 at the last
+checkpoint, and every intermediate number moved with it.
+
+| | before the fixes | after |
+|---|---|---|
+| frozen coins @ 3000 | 0.00 | **6.62** |
+| crates / round (last 300, training) | 1.33 | **29.65** |
+| good bombs / round | 0.62 | **13.11** |
+| mean reward / round | not logged | +31.6 |
+| invalid actions, all 3000 rounds | 0 | **0** |
+
+Training-time progression of the new run:
+
+```
+rounds        eps   steps   coins  crates   good  useless  suicid   reward    loss
+1-300       0.905    18.5    0.01    1.85   0.91     0.21   0.103    -9.55  0.2684
+1201-1500   0.145    47.4    0.18    4.65   2.40     2.76   0.217    -5.07  0.3040
+1501-1800   0.050   140.0    0.70    9.90   5.36     7.09   0.213    +4.91  0.2446
+2101-2400   0.050   144.0    1.77   23.20  11.77     4.03   0.083   +23.75  0.0962
+2701-3000   0.050   137.8    3.17   29.65  13.11     3.66   0.110   +31.64  0.0687
+```
+
+The collapse at round 1500 that killed the previous run did not happen. Crates
+rise straight through the point where epsilon anneals and keep rising. Useless
+bombs peak at 7.09 and then fall to 3.66, which is the agent learning bomb
+placement rather than learning to stop bombing.
+
+### Frozen evaluation, 200 rounds per checkpoint
+
+```
+r2500: coins 3.91 +/-0.35 | steps 345 | suicide 14.0% | invalid 0.00
+r2750: coins 5.24 +/-0.46 | steps 331 | suicide 17.5% | invalid 0.00
+r3000: coins 6.25 +/-0.41 | steps 344 | suicide 14.0% | invalid 0.00
+```
+
+Coins are climbing steeply and had not levelled off when the run ended. The
+suicide rate is flat. **These are two independent problems**, and only the coin
+one is solved by training longer.
+
+### Where the coins actually are, 300 rounds at r3000
+
+```
+died       n= 45  coins 0.47  steps  21.6  reach 8+:  0.0%
+survived   n=255  coins 7.47  steps 398.2  reach 8+: 59.2%
+ALL        n=300  coins 6.42  steps 341.7  reach 8+: 50.3%
+```
+
+Coin distribution over 300 rounds: `{0: 38, 1: 2, 2: 5, 3: 8, 4: 5, 5: 9,
+6: 29, 7: 53, 8: 80, 9: 71}`. It is bimodal. Either the agent dies immediately
+with nothing, or it plays a good round. There is almost nothing in between.
+
+**Half of all rounds already meet the coin half of the gate.** Removing the
+deaths alone moves the mean to 7.47 against a target of 8.
+
+### Root cause: it opens with a bomb it cannot escape
+
+Death step quartiles: `[5, 5, 5, 5, 5, 5, 7, 34, 68]`. `BOMB_TIMER` is 4, so a
+bomb dropped on step 1 explodes at the end of step 5. Almost every death is the
+agent's own first bomb.
+
+Probed directly: build 2000 `crate-light` boards, put the network in the start
+state, take its greedy action, and separately ask `escape_exists` whether a bomb
+there is survivable.
+
+```
+boards tested                          2000
+opening bomb would be unescapable      22.0%
+agent picks BOMB as its first action   48.1%
+  ... and it is escapable              38.9%
+  ... and it is NOT escapable           9.3%   <-- guaranteed death
+```
+
+The start corner is cleared of crates by `build_arena`, but the corridor out of
+it is not, and with 35% density there is often no tile at distance 4 reachable
+in the 4 steps the timer allows. The agent has learned this *partially*: of the
+22% of boards where the opening bomb is fatal it correctly declines on 58% of
+them. On the other 42% it dies.
+
+9.3% of boards is a guaranteed death with a frozen policy and no exploration.
+The measured suicide rate is 15%. So the opening move alone is about two thirds
+of every death the agent suffers.
+
+### The fix, and the honest caveat
+
+Mask `BOMB` in `choice_mask` whenever `escape_exists` is false, exactly as
+illegal moves are already masked. `escape_exists` is already written, already
+unit-tested, and one BFS per step is nothing against a 0.99 ms decision time and
+a 500 ms budget.
+
+The caveat for the report: this is a hand-coded rule, not a learned one.
+`SUICIDAL_BOMB` at -3.0 was supposed to teach it and did not, because the state
+is uncommon, the punishment arrives four steps late, and the same action is
+correct on 78% of boards. It belongs in the same category as the legal-move
+mask: it encodes the rules of the game, not a strategy. Worth saying out loud
+rather than hiding.
+
+### Housekeeping
+
+`_open_log` only rotates the log aside when the header changes, so this run
+appended to the previous one and `training_log.csv` now holds two runs with the
+round counter restarting at line 3002. Archived correctly as
+`experiments/runs/2026-09-09-task2-crate-light-3000r-fixed.csv`; the rotation
+rule should probably also trigger when round 1 reappears.
+
 
 ## 2026-09-09 (evening) — Four reward fixes, with the arithmetic
 
