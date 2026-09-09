@@ -137,3 +137,9 @@ agent_code/dqn_*/
 !agent_code/dqn_baseline/
 !agent_code/dqn_global_view/
 _to_delete/
+
+# macOS finder droppings
+.DS_Store
+
+# Rotated training logs (superseded headers)
+agent_code/*/training_log.*.csv

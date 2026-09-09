@@ -258,6 +258,44 @@ def danger_map(game_state: dict) -> np.ndarray:
     return np.clip(danger, 0.0, 1.0)
 
 
+def steps_to_safety(game_state: dict, from_pos=None, extra_bomb=None):
+    """How many moves to the nearest tile that is still safe on arrival.
+
+    0 means already safe. None means no escape exists.
+
+    Progress out of a blast has to be measured this way, not by steps-until-
+    lethal: a whole blast shares one countdown, so that number falls by exactly
+    one every step no matter where the agent moves inside it. Using it made
+    "getting closer to safety" impossible to detect and charged the agent for
+    every step of a correct escape.
+    """
+    field = game_state["field"]
+    start = tuple(from_pos or game_state["self"][3])
+    steps = steps_until_lethal(game_state, extra_bomb=extra_bomb)
+
+    blocked = {(bx, by) for (bx, by), _ in game_state["bombs"]}
+    blocked |= {pos for _, _, _, pos in game_state["others"]}
+
+    seen = {start}
+    frontier = [(start, 0)]
+    while frontier:
+        (x, y), d = frontier.pop(0)
+        if steps[x, y] >= SAFE:
+            return d
+        if d >= s.BOMB_TIMER:
+            continue
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if not (0 <= nx < field.shape[0] and 0 <= ny < field.shape[1]):
+                continue
+            if (nx, ny) in seen or field[nx, ny] != 0 or (nx, ny) in blocked:
+                continue
+            if steps[nx, ny] <= d:
+                continue
+            seen.add((nx, ny))
+            frontier.append(((nx, ny), d + 1))
+    return None
+
+
 def escape_exists(game_state: dict, from_pos=None, extra_bomb=None) -> bool:
     """Can the agent reach a tile that will not kill it, in time?
 
@@ -266,6 +304,11 @@ def escape_exists(game_state: dict, from_pos=None, extra_bomb=None) -> bool:
     lethal is greater than d. Used to tell a bomb worth dropping from one that
     is suicide.
     """
+    return steps_to_safety(game_state, from_pos, extra_bomb) is not None
+
+
+def _unused_escape_exists(game_state, from_pos=None, extra_bomb=None):
+    """Kept only so the original breadth-first version stays readable."""
     field = game_state["field"]
     start = tuple(from_pos or game_state["self"][3])
     steps = steps_until_lethal(game_state, extra_bomb=extra_bomb)

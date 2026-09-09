@@ -6,13 +6,45 @@ newest first.
 
 ---
 
-## STATUS (2026-09-08)
+## STATUS (2026-09-09, evening)
 
-Task 1 passed. **Task 2 is set up and verified but not yet trained.** 13 days to
-the code deadline, 9 to the crash test.
+Task 1 passed. Task 2 trained once and scored **0.0 coins**; cause found and
+four reward fixes applied, **not yet retrained**. 12 days to the code deadline,
+8 to the crash test.
 
-| | Coins per round |
+| | |
 |---|---|
+| Task 1 best (frozen) | 47.39 coins in 234 steps |
+| Task 2 gate | suicide rate < 2%, 8 of 9 coins |
+| Task 2 last measured | 0.0 coins, 0 invalid, ~0.05 suicidal, 400 steps |
+
+The agent was not failing to learn. Under the old rewards, doing nothing scored
+-0.32 and bombing two crates scored -0.75, so not bombing was strictly correct.
+After the fixes those are -0.32 and +2.35.
+
+Run next:
+
+```
+DQN_VIEW="ego:13" DQN_EPS_DECAY=1500 python tools/train_curve.py \
+  --rounds 3000 --checkpoint-every 250 --eval-rounds 40 --scenario crate-light
+```
+
+Watch `crates` and `suicidal_bombs`. Crates must keep rising after epsilon
+anneals at round 1500; last time they collapsed there.
+
+---|---|
+| Task 1 best (frozen) | 47.39 coins in 234 steps |
+| Task 2 gate | suicide rate < 2%, 8 of 9 coins |
+| Task 2 now | **0.0 coins**, 0 invalid, ~0.05 suicidal bombs, 400 steps |
+
+The agent learned to survive by not bombing. Crates peaked at 3.2/round while
+exploration forced bombs (epsilon 0.24) and collapsed to 1.2 once greedy.
+
+**Root cause: the reward shaping is inert on a crate board.** See the 2026-09-09
+entry. Do not run more task-2 training until it is fixed; the result will be the
+same.
+
+---|---|
 | `rule_based_agent` | 50.0 |
 | best frozen DQN (global_view @ 2750) | 47.4 in 234 steps |
 | gate-1 pass (baseline @ 250) | 46.06, CI [45.5, 46.7], 0 invalid |
@@ -342,6 +374,134 @@ over the first half and the second half exploits.
 ---
 
 # Part 2 — Log
+
+## 2026-09-09 (evening) — Four reward fixes, with the arithmetic
+
+The agent was behaving correctly under a reward function that asked for
+nothing. Expected value of a five-step window, gamma 0.95, assuming a bomb
+breaks two crates and 5% of bombs kill it:
+
+| | bomb 2 crates | do nothing | margin |
+|---|---|---|---|
+| before | -0.75 | -0.32 | **-0.44** |
+| after | +2.35 | -0.32 | **+2.67** |
+
+Still positive if 30% of bombs kill it (+1.42). That is the check that was
+missing before the first 3000-round run: the reward design was never priced
+against the alternative of standing still.
+
+### Fix 1: the potential needs a target that exists
+
+`_distance_to_target` returns the distance to the nearest collectable coin, or
+if there is none, to the nearest tile from which a bomb would break a crate.
+The coin-only version returned None on every task-2 board.
+
+### Fix 2: your own bomb is not "walking into danger"
+
+`ENTERED_DANGER` (-0.6) is suppressed on the step a bomb is dropped. Dropping
+one necessarily puts the agent in its own blast; charging for that penalises
+bombing twice, once through the bomb verdict and again for its unavoidable
+consequence.
+
+### Fix 3: escaping is progress, not stalling
+
+Found while writing out the arithmetic rather than by running anything.
+`CLOSER_TO_SAFETY` could **never fire**. It compared steps-until-lethal before
+and after, but a blast shares one countdown, so that number falls by exactly one
+per step wherever the agent moves inside it, and `now > was` is impossible.
+Every step of a correct four-step escape therefore fired `STAYED_IN_DANGER` at
+-0.4, taxing a successful escape -1.2.
+
+Progress is now measured with `steps_to_safety`, a breadth-first distance to the
+nearest tile still safe on arrival. Verified along a corridor: standing at
+distance 1, 2, 3, 4 from the blast edge gives 4, 3, 2, 1 moves to safety, and
+each step of a correct escape now registers as `CLOSER_TO_SAFETY`.
+
+### Fix 4: rebalance
+
+`GOOD_BOMB` 0.4 -> 1.0, `CRATE_DESTROYED` 0.3 -> 0.5, `COIN_FOUND` 0.2 -> 0.5,
+`KILLED_SELF`/`GOT_KILLED` -6.0 -> -5.0. Suicidal bombs were already near zero,
+so the discipline is coming from `SUICIDAL_BOMB` (-3.0); -6.0 on top of it was
+what made bombing look like a bad trade.
+
+### Method note
+
+Three of these four came from writing the reward out as arithmetic, not from a
+training run. The 3000-round run that produced 0.0 cost about 45 minutes and
+told us less than ten minutes of algebra. Worth pricing a reward change against
+the do-nothing baseline before spending a run on it.
+
+
+## 2026-09-09 — Task 2 trains to a score of zero, and why
+
+**Result.** 3000 rounds on `crate-light`. Frozen evaluation: **0.0 coins at all
+twelve checkpoints**, 400 steps, 0 invalid actions.
+
+Training-time progression:
+
+```
+rounds        eps     steps   crates  good_bombs  suicidal  invalid
+1-300       0.810     46.6      1.96        0.96      0.08     0.00
+601-900     0.430    125.1      3.14        1.50      0.06     0.00
+901-1200    0.240    203.4      3.23        1.60      0.04     0.00   <- peak
+1201-1500   0.050    332.2      2.31        1.12      0.08     0.00
+1501-1800   0.050    379.6      1.20        0.59      0.03     0.00
+2701-3000   0.050    379.4      1.33        0.62      0.05     0.00
+```
+
+**What worked.** Survival. Steps went 47 -> 380 and suicidal bombs stayed near
+zero throughout, so the escape detection and the -3.0 penalty did their job.
+Invalid actions were 0.00 from the first round, so legal-move masking held.
+
+**What failed.** Crates peaked at 3.2 per round while exploration was still
+forcing bombs, then collapsed to 1.2 the moment the policy went greedy. The
+agent actively chose to bomb less. It learned to survive by doing nothing.
+
+### Root cause: the shaping is inert on a crate board
+
+`_potential` is `-scale * BFS distance to the nearest coin`, and
+`game_state["coins"]` lists only *collectable* coins. Measured across the three
+scenarios at step 1:
+
+| scenario | coins | crates | visible at step 1 |
+|---|---|---|---|
+| `coin-heaven` | 50 | 0 | **50** |
+| `crate-light` | 9 | 56 | **0** |
+| `classic` | 9 | 119 | **0** |
+
+Every coin starts inside a crate. So on any task-2 board the potential is 0 at
+every step and the shaping term contributes exactly nothing. The whole dense
+reward signal that carried task 1 is switched off, and what remains is a -0.02
+step penalty, a -6.0 death penalty, and bomb events whose expected value is
+marginal. Standing still is a rational optimum under that reward function.
+
+This is the same class of error as 2026-09-05: the reward function was measured
+against the wrong scenario. It was correct for task 1 and silently degenerate
+for task 2.
+
+### Fixes to apply, none applied yet
+
+1. **Make the potential target crates when no coin is visible.** Phi should be
+   the distance to the nearest coin if one is collectable, else the distance to
+   the nearest tile from which a bomb would break a crate. This restores dense
+   guidance toward the thing actually worth doing.
+2. **Stop double-penalising your own bomb.** Dropping one necessarily puts the
+   agent in its own blast, which fires `ENTERED_DANGER` (-0.6) on top of the
+   bomb verdict. Suppress that event for the agent's own freshly dropped bomb.
+3. **Rebalance.** `GOOD_BOMB` +0.4 and `CRATE_DESTROYED` +0.3 against
+   `KILLED_SELF` -6.0 makes bombing marginal, and the crate reward arrives four
+   steps later discounted by gamma while the death is immediate.
+
+Do not train again until at least fix 1 is in. The outcome will not change.
+
+### Arithmetic worth keeping for the report
+
+At 0.35 crate density there are ~56 crates and 9 coins, so roughly 16% of crates
+hide a coin. Reaching the gate's 8 of 9 coins means destroying most of the
+crates on the board. At the observed peak of 3.2 crates per round the agent
+would find about 0.5 coins. The gate is not close, and the target behaviour is
+"bomb constantly and survive", not "bomb occasionally".
+
 
 ## 2026-09-08 — Task 2 groundwork, and two things measured rather than assumed
 

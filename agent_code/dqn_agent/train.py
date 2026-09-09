@@ -28,7 +28,8 @@ import events as e
 import settings as s
 
 from .callbacks import (MODEL_FILE, SAFE, blast_coords, choice_mask, escape_exists,
-                        save_model, state_to_features, steps_until_lethal, view_shape)
+                        save_model, state_to_features, steps_to_safety,
+                        steps_until_lethal, view_shape)
 from .model import ACTIONS, N_CHANNELS, QNetwork, ReplayBuffer, masked_argmax
 
 LOG_FILE = Path(__file__).parent / "training_log.csv"
@@ -92,16 +93,19 @@ REWARDS = {
     e.COIN_COLLECTED: 1.0,
     e.INVALID_ACTION: -0.5,
     e.WAITED: -0.05,
-    e.CRATE_DESTROYED: 0.3,
-    e.COIN_FOUND: 0.2,
+    e.CRATE_DESTROYED: 0.5,
+    e.COIN_FOUND: 0.5,
     e.KILLED_OPPONENT: 5.0,
-    e.KILLED_SELF: -6.0,
-    e.GOT_KILLED: -6.0,
+    # Was -6.0. With suicidal bombs already near zero the discipline is coming
+    # from SUICIDAL_BOMB, and -6.0 on top made bombing at all look like a bad
+    # trade: the agent chose to stop rather than risk it.
+    e.KILLED_SELF: -5.0,
+    e.GOT_KILLED: -5.0,
 
     # Bombs. Paired so the opposites cancel rather than leaving a farmable
     # positive, which is the trap the spec warns about and which bit us once
     # already (LOG.md 2026-09-05).
-    GOOD_BOMB: 0.4,
+    GOOD_BOMB: 1.0,     # was 0.4; a useful bomb has to beat the risk of taking it
     USELESS_BOMB: -0.3,
     SUICIDAL_BOMB: -3.0,     # heavy: this is the single biggest failure mode
     ESCAPED_DANGER: 0.5,
@@ -139,22 +143,33 @@ def _bomb_events(self, old_state, action, new_state, events):
     if new_state is None:
         return extra
 
-    was = int(steps_until_lethal(old_state)[ox, oy])
     nx, ny = new_state["self"][3]
-    now = int(steps_until_lethal(new_state)[nx, ny])
+    in_danger_before = int(steps_until_lethal(old_state)[ox, oy]) < SAFE
+    in_danger_now = int(steps_until_lethal(new_state)[nx, ny]) < SAFE
 
-    in_danger_before = was < SAFE
-    in_danger_now = now < SAFE
+    dropped = e.BOMB_DROPPED in events
 
     if in_danger_before and not in_danger_now:
         extra.append(ESCAPED_DANGER)
-    elif not in_danger_before and in_danger_now:
+    elif not in_danger_before and in_danger_now and not dropped:
+        # Dropping a bomb necessarily puts the agent in its own blast. Charging
+        # ENTERED_DANGER for that penalises bombing twice, once through the bomb
+        # verdict and again for the unavoidable consequence.
         extra.append(ENTERED_DANGER)
     elif in_danger_before and in_danger_now:
-        # Both counts are "steps until this tile kills me". A larger number is
-        # further from death, so moving down a blast toward its edge counts as
-        # progress even before the agent is fully clear.
-        extra.append(CLOSER_TO_SAFETY if now > was else STAYED_IN_DANGER)
+        # Progress is measured as moves-still-needed-to-reach-safety. Using
+        # steps-until-lethal here was wrong: a blast shares one countdown, so
+        # that number falls by one every step wherever the agent goes, making
+        # CLOSER_TO_SAFETY unreachable and taxing every step of a correct
+        # escape at -0.4.
+        before = steps_to_safety(old_state)
+        after = steps_to_safety(new_state)
+        if after is None:
+            extra.append(STAYED_IN_DANGER)
+        elif before is None or after < before:
+            extra.append(CLOSER_TO_SAFETY)
+        else:
+            extra.append(STAYED_IN_DANGER)
 
     return extra
 
@@ -409,22 +424,39 @@ def _reward(self, events: List[str], phi_old: float, phi_new: float) -> float:
 def _potential(self, game_state: dict) -> float:
     if game_state is None:
         return 0.0
-    distance = _distance_to_nearest_coin(game_state)
+    distance = _distance_to_target(game_state)
     if distance is None:
         return 0.0
     return -self.cfg["shaping_scale"] * min(distance, self.cfg["shaping_cap"])
 
 
-def _distance_to_nearest_coin(game_state: dict):
-    """Breadth-first search over free tiles. Training-only, so its cost never
-    counts against the 0.5 s per-step budget in official games."""
-    coins = game_state["coins"]
-    if not coins:
-        return None
+def _is_bombing_spot(field, x, y) -> bool:
+    """Would a bomb dropped here break at least one crate?"""
+    return any(field[bx, by] == 1 for (bx, by) in blast_coords(field, x, y))
 
+
+def _distance_to_target(game_state: dict):
+    """Steps to the nearest thing worth walking to.
+
+    A collectable coin if there is one, otherwise the nearest tile from which a
+    bomb would break a crate.
+
+    The coin-only version was silently dead in task 2. `game_state["coins"]`
+    lists only *collectable* coins, and on a crate board every coin starts
+    inside a crate, so there were none: measured 0 visible at step 1 on both
+    `crate-light` and `classic`, against 50 on `coin-heaven`. The potential was
+    therefore 0 at every step and the whole dense reward signal was switched
+    off. See the 2026-09-09 entry.
+    """
     field = game_state["field"]
     _, _, _, start = game_state["self"]
-    targets = set(map(tuple, coins))
+
+    coins = game_state["coins"]
+    if coins:
+        targets = set(map(tuple, coins))
+        reached = lambda x, y: (x, y) in targets
+    else:
+        reached = lambda x, y: _is_bombing_spot(field, x, y)
 
     visited = np.zeros_like(field, dtype=bool)
     visited[start] = True
@@ -432,7 +464,7 @@ def _distance_to_nearest_coin(game_state: dict):
 
     while queue:
         (x, y), dist = queue.popleft()
-        if (x, y) in targets:
+        if reached(x, y):
             return dist
         for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
             if not (0 <= nx < field.shape[0] and 0 <= ny < field.shape[1]):
@@ -442,4 +474,4 @@ def _distance_to_nearest_coin(game_state: dict):
             visited[nx, ny] = True
             queue.append(((nx, ny), dist + 1))
 
-    return None  # no coin reachable
+    return None  # nothing worth reaching
