@@ -44,6 +44,31 @@ def dqn_env():
     return env
 
 
+def archive_checkpoints():
+    """Move any existing checkpoints aside before a new training run.
+
+    Without this, a shorter run leaves the previous run's higher-numbered
+    checkpoints in place, the curve is then built from `glob("dqn-r*.pt")`, and
+    the tail of eval_curve.csv silently reports a *different run's* models
+    measured on the current scenario. That happened on 2026-09-09: a 4000-round
+    classic run produced a curve with rows out to 6000, and the last eight rows
+    were stale crate-light models. It also means one run can overwrite another
+    run's weights, which cost us run 1's checkpoints the same day.
+
+    Returns the archive directory, or None if there was nothing to move.
+    """
+    existing = sorted(CHECKPOINTS.glob("dqn-r*.pt"))
+    if not existing:
+        return None
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    dest = CHECKPOINTS / f"archive-{stamp}"
+    dest.mkdir(parents=True)
+    for path in existing:
+        path.rename(dest / path.name)
+    print(f"Moved {len(existing)} existing checkpoints to {dest.name}/", flush=True)
+    return dest
+
+
 def train(rounds, checkpoint_every, scenario, resume, env_extra):
     env = {
         **os.environ, **env_extra,
@@ -87,9 +112,15 @@ def main():
     env_extra = dqn_env()
 
     if not args.eval_only:
+        archive_checkpoints()
         train(args.rounds, args.checkpoint_every, args.scenario, args.resume, env_extra)
 
     checkpoints = sorted(CHECKPOINTS.glob("dqn-r*.pt"))
+    # Belt and braces: even with the archive step, never plot a checkpoint from
+    # beyond this run's horizon. A row labelled r6000 on a 4000-round run is a
+    # different run's model and the curve must not imply otherwise.
+    checkpoints = [c for c in checkpoints
+                   if int(c.stem.split("-r")[1]) <= args.rounds]
     if not checkpoints:
         raise SystemExit(f"no checkpoints in {CHECKPOINTS}")
 

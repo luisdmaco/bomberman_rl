@@ -6,38 +6,72 @@ newest first.
 
 ---
 
-## STATUS (2026-09-09, three task-2 runs in)
+## STATUS (2026-09-09, on the real task-2 board)
 
-Task 2 best agent: **run 1 @ r3000 played with the suicide mask, 6.94 coins and
-5.67% suicide** over 300 frozen rounds. Gate is 8 coins and 2%. Both still
-climbing steeply when the runs ended, so the next thing is simply a longer run.
+**Half of gate 2 is passed on `classic`, the real board.** Over 1000 frozen
+rounds `r3750` scores **7.51 of 9 coins** with a **0.60% suicide rate (95% upper
+bound 1.30%)** and zero invalid actions. Survival gate: PASSED. Coin gate: 0.49
+short of 8.
 12 days to the code deadline, 8 to the crash test.
 
 | | |
 |---|---|
 | Task 1 best (frozen) | 47.39 coins in 234 steps |
-| Task 2 gate | suicide rate < 2%, 8 of 9 coins |
-| Task 2 best (run1 r3000 + mask, 300 rounds) | **6.94 coins**, **5.67% suicide**, 0 invalid |
-| ... in rounds where it survives | 7.27 coins, 52% reach 8 or more |
+| Task 2 gate | suicide < 2%, 8 of 9 coins |
+| **Task 2 best** (`classic` r3750, **1000 rounds**) | **7.51 coins** [7.37, 7.65], **0.60%** suicide (95% upper 1.30%), 70.6% reach 8+ |
+| runner-up (`classic` r3000) | 7.74 coins, 3.00% suicide, 72.7% reach 8+ |
+| safest (`classic` r4000) | 6.34 coins, **0.33%** suicide (95% upper bound 1.86%) |
+| Reference `rule_based_agent`, same board | 8.60 coins, 0.00% suicide, 93.0% reach 8+ |
 
-**The one thing that has changed conceptually:** the suicide mask is now
-play-time only. Training with it on measurably hurts. See the third
-2026-09-09 entry.
+The agent does **better** on `classic` (119 crates) than on `crate-light`
+(56 crates): 7.76 against 7.02-7.48. More crates means more coins found per
+bomb, and the coin count is 9 either way.
 
-Weights are archived as `models/task2-run1-r3000-ego13.pt`. Run 3 overwrote
-`checkpoints/` and `dqn-model.pt`, so that archive is the only copy.
+Archived as `models/task2-classic-r3750-ego13.pt`.
 
-**Run this next.** Longer, and the mask now switches itself off for training:
+### What is left, precisely
+
+0.49 coins. The suicide half is settled: 0.60% over 1000 rounds, whole interval
+under the 2% limit.
+
+The reference agent reaches 8+ in 93% of rounds against our 75%, and gets 8.60
+coins, so the gate is achievable on this board but not by much margin.
+
+### Before the 17.09 upload: check which weights are in `dqn-model.pt`
+
+`agent_code/dqn_agent/dqn-model.pt` is the file that ships and the only one the
+tournament loads. It is *currently* the `crate-light` r6000 weights, because the
+augmentation ablation was set up to resume from exactly what the baseline
+`classic` run resumed from. **It is not the best agent right now.** Before the
+submission it must be set to whichever model wins, e.g.
 
 ```
-DQN_VIEW="ego:13" DQN_EPS_DECAY=3000 python tools/train_curve.py \
-  --rounds 6000 --checkpoint-every 250 --eval-rounds 40 --scenario crate-light
+cp models/task2-classic-r3750-ego13.pt agent_code/dqn_agent/dqn-model.pt
+python tools/evaluate.py --agents dqn_agent --scenario classic --n-rounds 200
 ```
 
-Roughly 90 minutes. Both runs so far gained about 1 coin per 250 rounds over
-their last 750 and had not levelled off, so doubling the budget is the cheapest
-remaining lever. `frozen_coins` in `eval_curve.csv` is the column to watch;
-there is no column called `coins`.
+Model archives under `models/` are gitignored and have to be added with
+`git add -f`, the same way the two task-1 models were.
+
+### Submission test: passed a dry run 8 days early
+
+Stock settings, no environment variables, `train=False`, three random opponents:
+0 crashes, 0 invalid actions, 0.73 ms/step. See the (night, 6) entry.
+
+### Next lever: symmetry augmentation, now implemented
+
+`crate-light` training is exhausted and `classic` converged by round 2500, so
+the remaining problem is sample efficiency. Daniela's 8-fold dihedral
+augmentation is in and tested (see the (night, 7) entry); the ablation run is
+set up to differ from the baseline by one flag.
+
+```
+DQN_VIEW="ego:13" DQN_AUGMENT=1 DQN_EPS_START=0.3 DQN_EPS_DECAY=2000 \
+  python tools/train_curve.py --rounds 4000 --checkpoint-every 250 \
+  --eval-rounds 40 --scenario classic --resume
+```
+
+After it, task 3 regardless of the result.
 
 ---
 
@@ -266,6 +300,247 @@ over the first half and the second half exploits.
 ---
 
 # Part 2 — Log
+
+## 2026-09-09 (night, 7) — Daniela's symmetry suggestion, implemented
+
+The board is square and every rule of the game is invariant under the eight
+symmetries of a square, so one observed transition is really eight. Rotating a
+board 90 degrees does not change which move is correct, it changes what that
+move is *called*, and until now the network had to learn each orientation from
+separate experience.
+
+### Design choices
+
+**Applied at sampling time, not at push time.** Pushing eight copies of every
+transition would cut the number of *distinct* situations a 50,000-entry buffer
+holds by a factor of eight. Transforming the batch as it is drawn keeps the
+buffer's diversity, costs no memory, and replays each transition in a different
+orientation on every visit, which also regularises.
+
+**Per sample, not per batch.** One orientation for a whole batch would correlate
+every gradient in it. Implemented by grouping the batch by transform, so it is
+eight small tensor ops rather than a Python loop.
+
+**Training only.** The submitted agent never samples a replay buffer, so this
+cannot affect the submission. `DQN_AUGMENT` defaults to 0 so the runs already in
+`experiments/runs/` stay the honest baseline.
+
+### The part that needed testing
+
+`state_to_features` builds channels as `channels[c][x, y]`, so tensor dim -2 is
+x. Under rot90 in that plane an offset (u, v) maps to (-v, u), which sends
+UP -> RIGHT -> DOWN -> LEFT, one step along `ACTIONS[0:4]`. Flipping x fixes UP
+and DOWN and swaps RIGHT and LEFT. WAIT and BOMB are invariant.
+
+A wrong action permutation here would teach the network that walking left leads
+where walking up leads, and **nothing in the loss curve or the reward would look
+wrong**. Given how much of this project has been lost to silent errors of
+exactly that shape, it gets a real test suite: `tools/test_augment.py`, 71
+checks, all passing.
+
+The strongest of them is check 3: transform the *world* (rotate the arena, move
+the agent and the coins accordingly), compute features from that, and compare
+against transforming the features of the original. They agree exactly for all
+eight elements. That validates the board transform independently of the algebra.
+Check 2 then pins the action permutation by placing a coin one tile in each
+direction and confirming it lands where the permuted action points.
+
+`next_legal` moves by the *inverse* permutation, since it is a mask indexed by
+action rather than an action.
+
+Cost: 2.51 ms per sampled batch of 128 against 0.53 ms, so about 70 seconds
+added across a 4000-round run. Irrelevant.
+
+### The ablation, set up as a single-variable comparison
+
+`dqn-model.pt` has been reset to `archive-crate-light-6000r/dqn-r006000.pt`, the
+exact weights the baseline `classic` run resumed from. The augmented run
+therefore differs from `2026-09-09-task2-classic-4000r` in one flag and nothing
+else, which is the standard the plan sets for every comparison.
+
+Baseline to beat: **7.51 coins over 1000 rounds, 0.60% suicide**, from r3750.
+
+
+## 2026-09-09 (night, 6) — Submission dry run passes, 8 days early
+
+The 17.09 submission test is a hard deadline and the plan lists it as a common
+way teams lose the tournament, so it is now de-risked rather than assumed.
+
+Ran the agent exactly as the tutors will: **stock `settings.py`** (our
+`crate-light` scenario stripped, since only `agent_code/dqn_agent/` is
+submitted), **no `DQN_*` environment variables at all**, `train=False`, against
+three `random_agent`s on `classic`, weights loaded from
+`agent_code/dqn_agent/dqn-model.pt`.
+
+```
+rounds 20 | score 158 | invalid actions 0 | 0.73 ms/step | 7.9 coins/round
+exit code 0
+```
+
+Everything that was flagged as a submission risk holds:
+
+- `peek_view` reads the view from the checkpoint before building the network, so
+  `DQN_VIEW` being unset does not build the wrong shape. This was open risk #1
+  after task 1.
+- `DQN_LEGAL_MASK` and `DQN_SUICIDE_MASK` both default to on at play time, so
+  the unset environment gives the intended behaviour rather than the ablation.
+- 0.73 ms per step against the 500 ms tournament budget, single thread.
+- No dependency on our added scenario.
+
+Only 20 rounds; this is a crash-and-configuration check, not a performance
+measurement.
+
+
+## 2026-09-09 (night, 5) — `classic`: 7.76 coins, and a curve that lied again
+
+Resumed the converged `crate-light` policy onto `classic` (119 crates against
+56), 4000 rounds, `DQN_EPS_START=0.3`, `DQN_EPS_DECAY=2000`.
+
+### First: the curve was wrong, again
+
+`eval_curve.csv` came out with 24 rows going to r6000 for a 4000-round run, and
+the last eight rows averaged about 4.3 coins, which read as a failure.
+
+`train_curve.py` builds the curve with `sorted(CHECKPOINTS.glob("dqn-r*.pt"))`.
+The 4000-round run overwrote r250 through r4000, but r4250 through r6000 from
+the previous 6000-round `crate-light` run were still sitting in the directory.
+So the tail of the curve was **a different run's models, from a different
+scenario, measured on this one**. Rows 1-16 are the real run.
+
+This is the fifth time a measurement artefact has looked like a modelling
+result. Fixed two ways: `archive_checkpoints()` moves any existing checkpoints
+into a timestamped subfolder before a training run starts, and the curve now
+also refuses to plot any checkpoint numbered above `--rounds`. The archive step
+additionally prevents one run silently overwriting another's weights, which
+cost us run 1's checkpoints earlier the same day.
+
+### The training run
+
+```
+rounds       eps   steps  coins  crates   good  suicid   reward    loss
+1-500      0.269    32.6   0.32   12.16   3.48   0.034    +0.39  0.2597
+1001-1500  0.144    59.0   0.94   25.98   6.78   0.008   +13.71  0.1494
+1501-2000  0.081   122.2   2.43   50.12  13.35   0.014   +39.52  0.0887
+2001-2500  0.050   143.5   3.04   59.36  15.88   0.008   +50.20  0.0554
+2501-3000  0.050   150.0   3.31   62.22  16.76   0.028   +53.62  0.0560
+3501-4000  0.050   145.1   3.23   61.98  16.53   0.018   +52.88  0.0566
+```
+
+Converged by round 2500. 62 crates destroyed per round against 34 on
+`crate-light`, 16.5 good bombs, invalid actions 0 across all 4000 rounds.
+The resume at `DQN_EPS_START=0.3` worked: the agent starts at 12 crates per
+round rather than the ~1.9 a from-scratch run starts at.
+
+### Confirmed over 300 frozen rounds each, on `classic`
+
+| checkpoint | coins | 95% CI | steps | suicide | 95% upper | reach 8+ |
+|---|---|---|---|---|---|---|
+| r2250 | 6.28 | [5.99, 6.57] | 395.5 | 0.67% | 2.40% | 39.0% |
+| r2750 | 7.28 | [7.02, 7.55] | 392.9 | 1.33% | 3.38% | 65.7% |
+| r3000 | 7.74 | [7.52, 7.96] | 372.5 | 3.00% | 5.60% | 72.7% |
+| **r3750** | **7.76** | [7.53, 7.98] | 395.8 | **0.67%** | 2.40% | **75.0%** |
+| r4000 | 6.34 | [6.09, 6.60] | 398.7 | **0.33%** | **1.86%** | 35.3% |
+| `rule_based_agent` | **8.60** | +/- 0.09 | | 0.00% | | **93.0%** |
+
+**The agent is better on the harder board.** 7.76 on `classic` against
+7.02-7.48 on `crate-light`. More crates means more coins per bomb and the coin
+count is 9 either way, so the "harder" board is actually the easier one for this
+objective. Worth stating in the report, since the curriculum ordering assumed
+the opposite.
+
+### The 1000-round re-confirmation of the crate-light claim
+
+The 0.00% suicide rate claimed for `crate-light` r5750 was partly luck, as
+suspected. Over 1000 rounds it is **1.20%, 95% upper bound 2.09%**, with 6.91
+coins. So that checkpoint does *not* cleanly pass the 2% gate; it sits on the
+boundary. r5000 over 1000 rounds: 7.30 coins, 4.90% suicide. Recording this
+because the 300-round number is already written down above and should not be
+the one that survives into the report.
+
+### Confirmed over 1000 rounds: the suicide gate is met
+
+`classic` r3750, 1000 frozen rounds: **7.51 coins [7.37, 7.65], suicide 0.60%
+with a 95% upper bound of 1.30%**, 394.5 steps, 70.6% of rounds reach 8+.
+
+**Gate 2 survival: PASSED.** The whole confidence interval is below the 2%
+limit, which is the standard used for gate 1 and the only one that supports a
+claim in the report. **Gate 2 coins: 7.51 of 9 against a target of 8, short by
+0.49.**
+
+### What is left
+
+0.49 coins. `classic` has converged, so the next lever is not more rounds: it
+is the symmetry augmentation, which buys sample efficiency, which is exactly
+what a converged-but-short agent needs.
+
+
+## 2026-09-09 (night, 4) — 6000 rounds: the suicide half of gate 2 passes
+
+Same command at double the budget, `DQN_EPS_DECAY=3000`, mask off in training
+and on at play. `suicidal_bombs` totals 582 over the run, confirming the mask
+really was off; invalid actions 0.
+
+### It converged
+
+```
+rounds       eps   steps  coins  crates   good useless  suicid   reward    loss
+2501-3000  0.129    56.7   0.36    7.12   3.65    2.99   0.168    -1.30  0.3774
+3001-3500  0.050   153.2   1.35   19.53   9.53    5.68   0.050   +16.79  0.1431
+3501-4000  0.050   165.8   3.17   31.64  13.91    3.85   0.070   +33.82  0.0669
+4001-4500  0.050   165.8   4.01   33.81  14.65    6.11   0.050   +38.46  0.0606
+4501-5000  0.050   159.8   4.07   33.57  14.36    3.33   0.042   +37.49  0.0560
+5001-5500  0.050   159.7   4.06   34.31  14.83    3.90   0.040   +38.79  0.0569
+5501-6000  0.050   158.0   4.07   33.72  14.82    4.23   0.042   +38.46  0.0566
+```
+
+Flat on every metric for the last 2000 rounds. This is the first task-2 run that
+plateaued rather than being cut off mid-climb, so "train longer on
+`crate-light`" is now exhausted as a lever.
+
+`eval_curve.csv` oscillates between 5.78 and 7.72 after round 4000, which is
+40-round noise (+/- 0.85), not signal. Confirmed the candidates over 300 rounds:
+
+| checkpoint | coins | 95% CI | steps | suicide | reach 8+ |
+|---|---|---|---|---|---|
+| r4250 | 6.32 | [6.03, 6.61] | 386.7 | 3.67% | 42.7% |
+| **r5000** | **7.48** | [7.20, 7.76] | 346.0 | 4.67% | **71.7%** |
+| r5250 | 6.63 | [6.33, 6.94] | 382.4 | 4.00% | 52.0% |
+| **r5750** | 7.02 | [6.78, 7.27] | **399.0** | **0.00%** | 54.3% |
+| r6000 | 5.56 | [5.21, 5.91] | 382.2 | 1.00% | 35.3% |
+| run 1 r3000 (previous best) | 6.92 | [6.64, 7.19] | 371.5 | 7.33% | 55.7% |
+| `rule_based_agent` | **8.99** | +/- 0.01 | 340.7 | 0.00% | **100.0%** |
+
+**Gate 2, suicide rate below 2%: passed** by `r5750` (0 of 300) and `r6000`
+(1.00%). **Gate 2, 8 of 9 coins: not passed**, best is 7.48.
+
+### What the numbers say the problem is now
+
+`r5750` survives 399 of 400 steps and still finds only 7 coins. It is not dying,
+it is running out of time. `rule_based_agent` finds 8.99 on the same board in
+341 steps, so the target is reachable and our agent is roughly one coin and
+sixty steps of efficiency short of it.
+
+There is also a visible safety/greed trade-off along one run: `r5000` finds the
+most coins and reaches 8+ in 71.7% of rounds while dying 4.67% of the time;
+`r5750`, 750 rounds later, never dies and finds half a coin fewer. Both are kept.
+
+### Honest caveat on the pass
+
+The safety metric swings hard between adjacent checkpoints (4.67%, then 0.00%,
+then 1.00%, at 250-round spacing). The candidates were selected on *coins* from
+the 40-round curve and the suicide rate was then measured fresh, so it is not
+circular, but 0 of 300 from a checkpoint whose neighbours sit at 1-5% is partly
+luck. Re-confirming over 1000 rounds before putting "passes gate 2 on survival"
+in the report.
+
+### Still not done
+
+Daniela's symmetry suggestion (8-fold dihedral augmentation) is still not
+implemented. It was deferred while the reward function was broken, which was the
+right call, but that reason has now expired: the run converges, the bugs are
+gone, and the remaining problem is sample efficiency, which is exactly what
+augmentation buys.
+
 
 ## 2026-09-09 (night, 3) — Training with the shield on makes the agent worse
 

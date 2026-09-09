@@ -50,6 +50,54 @@ Transition = namedtuple("Transition",
                         ("state", "action", "next_state", "reward", "done", "next_legal"))
 
 
+# --- 8-fold dihedral augmentation -------------------------------------------
+#
+# Daniela's suggestion, and the cheapest remaining source of sample efficiency.
+# The board is square and every rule of the game is invariant under the eight
+# symmetries of a square, so one observed transition is really eight. Rotating
+# a board 90 degrees does not change which move is correct, it changes what that
+# move is *called*, and the network currently has to learn each orientation from
+# separate experience.
+#
+# Applied at sampling time rather than at push time. Same buffer, no memory
+# cost, and each transition is replayed in a different orientation on each
+# visit, which also acts as a regulariser. Pushing eight copies instead would
+# cut the number of distinct situations the buffer holds by eight.
+#
+# `state_to_features` builds channels as channels[c][x, y], so tensor dim -2 is
+# x and dim -1 is y. Under torch/numpy rot90 in that plane an offset (u, v)
+# maps to (-v, u), which sends UP -> RIGHT -> DOWN -> LEFT, i.e. exactly one
+# step along ACTIONS[0:4]. Flipping x fixes UP and DOWN and swaps RIGHT and
+# LEFT. WAIT and BOMB are invariant under all eight. This is derived, and also
+# asserted against the real feature pipeline in tools/test_augment.py, because
+# a silently wrong action permutation would teach the network that walking left
+# leads where walking up leads, and nothing about the loss curve would look
+# wrong.
+N_MOVES = 4
+_FLIP_PERM = (0, 3, 2, 1)
+TRANSFORMS = [(k, f) for f in (False, True) for k in range(4)]
+
+
+def action_permutation(k: int, flip: bool) -> np.ndarray:
+    """perm[a] is what action `a` becomes under (flip x, then rot90 k times)."""
+    perm = np.arange(N_ACTIONS)
+    for a in range(N_MOVES):
+        perm[a] = ((_FLIP_PERM[a] if flip else a) + k) % N_MOVES
+    return perm
+
+
+_PERM = {t: torch.from_numpy(action_permutation(*t)) for t in TRANSFORMS}
+# next_legal is a mask indexed by action, so it moves by the INVERSE
+# permutation: the entry for the new action perm[a] is the old entry for a.
+_INV = {t: torch.from_numpy(np.argsort(action_permutation(*t))) for t in TRANSFORMS}
+
+
+def transform_board(x: torch.Tensor, k: int, flip: bool) -> torch.Tensor:
+    if flip:
+        x = x.flip(-2)
+    return torch.rot90(x, k, dims=(-2, -1)) if k else x
+
+
 class QNetwork(nn.Module):
     """Small convolutional Q-network.
 
@@ -103,9 +151,12 @@ class ReplayBuffer:
 
     SCALE = 255.0
 
-    def __init__(self, capacity: int, rng: random.Random = None):
+    def __init__(self, capacity: int, rng: random.Random = None, augment: bool = False):
         self.memory = deque(maxlen=capacity)
         self.rng = rng or random.Random()
+        # Off by default so the un-augmented runs already in experiments/runs/
+        # remain the baseline this is measured against.
+        self.augment = augment
 
     @classmethod
     def _pack(cls, state):
@@ -139,7 +190,40 @@ class ReplayBuffer:
 
         next_legal = torch.from_numpy(np.stack([t.next_legal for t in batch]))
 
+        if self.augment:
+            states, next_states, actions, next_legal = self._augment(
+                states, next_states, actions, next_legal)
+
         return states, actions, next_states, rewards, dones, next_legal
+
+    def _augment(self, states, next_states, actions, next_legal):
+        """Apply an independent random symmetry to each sample in the batch.
+
+        Per-sample rather than per-batch: one orientation for a whole batch
+        would correlate every gradient in it. Done by grouping, so it costs
+        eight small tensor ops rather than a Python loop over the batch.
+
+        Rotations need a square board. The 17x17 arena and the 13x13 egocentric
+        window both are, but a non-square view would silently rotate into the
+        wrong shape, so it is checked rather than assumed.
+        """
+        if states.shape[-1] != states.shape[-2]:
+            return states, next_states, actions, next_legal
+
+        n = states.shape[0]
+        pick = torch.tensor([self.rng.randrange(len(TRANSFORMS)) for _ in range(n)])
+        for i, t in enumerate(TRANSFORMS):
+            if t == (0, False):
+                continue
+            idx = (pick == i).nonzero(as_tuple=True)[0]
+            if idx.numel() == 0:
+                continue
+            k, flip = t
+            states[idx] = transform_board(states[idx], k, flip)
+            next_states[idx] = transform_board(next_states[idx], k, flip)
+            actions[idx] = _PERM[t][actions[idx]]
+            next_legal[idx] = next_legal[idx][:, _INV[t]]
+        return states, next_states, actions, next_legal
 
     def __len__(self):
         return len(self.memory)

@@ -74,6 +74,11 @@ CONFIG = {
     # Numbered snapshots so an honest learning curve can be built afterwards
     # by replaying each one frozen. 0 disables.
     "checkpoint_every": _env("DQN_CHECKPOINT_EVERY", 0, int),
+    # 8-fold dihedral augmentation of replayed transitions. Training only:
+    # it changes nothing about the submitted agent, which never samples a
+    # replay buffer. Off by default so the runs already recorded in
+    # experiments/runs/ stay the honest baseline. DQN_AUGMENT=1 to enable.
+    "augment": _env("DQN_AUGMENT", 0, int),
     "seed": _env("DQN_SEED", -1, int),
 }
 
@@ -183,7 +188,11 @@ def setup_training(self):
         torch.manual_seed(cfg["seed"])
 
     self.cfg = cfg
-    self.buffer = ReplayBuffer(cfg["buffer_size"], rng=random.Random(cfg["seed"] if cfg["seed"] >= 0 else None))
+    self.buffer = ReplayBuffer(
+        cfg["buffer_size"],
+        rng=random.Random(cfg["seed"] if cfg["seed"] >= 0 else None),
+        augment=bool(cfg["augment"]),
+    )
 
     rows, cols = view_shape(s.ROWS, s.COLS, self.view)
     self.target_network = QNetwork(rows=rows, cols=cols, n_channels=N_CHANNELS).to(self.device)
