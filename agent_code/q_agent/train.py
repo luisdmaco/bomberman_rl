@@ -1,11 +1,13 @@
 from .features import state_to_features, danger_map, get_action_mask, bfs_direction_and_distance, get_blast_coords
 import events as e
+from collections import deque
 
 IN_DANGER = "IN_DANGER"
 MOVED_CLOSER_TO_COIN = "MOVED_CLOSER_TO_COIN"
 MOVED_FARTHER_FROM_COIN = "MOVED_FARTHER_FROM_COIN"
 BOMBED_CRATES = "BOMBED_CRATES"
 ESCAPED_DANGER = "ESCAPED_DANGER"
+STALLED = "STALLED"
 
 # TODO: are these the best values for our case?
 # Hyperparameter training
@@ -17,6 +19,8 @@ def setup_training(self):
     self.lr_min = 0.001
     self.lr_decay = 0.9995
     self.gamma = 0.95
+
+    self.recent_positions = deque(maxlen=10)
 
 # TODO: does this function updates the actual state of the game
 # or keeps track of the successes until the current step
@@ -37,8 +41,15 @@ def game_events_occurred(self, old_game_state, self_action, new_game_state, even
         _,_,_, n_pos = new_game_state['self']
         odm = danger_map(old_game_state['field'], old_game_state['bombs'], old_game_state['explosion_map'])
         ndm = danger_map(new_game_state['field'], new_game_state['bombs'], new_game_state['explosion_map'])
-        if o_pos in odm and n_pos in ndm:
+        if o_pos in odm and n_pos not in ndm:
             events.append(ESCAPED_DANGER)
+
+    if new_game_state is not None:
+        self.recent_positions.append(n_pos)
+        if(len(self.recent_positions) == self.recent_positions.maxlen
+            and len(set(self.recent_positions)) <= 2):
+            events.append(STALLED)
+    
 
     # custom event: immediate reward for a productive bomb
     if self_action == 'BOMB' and old_game_state is not None:
@@ -46,7 +57,7 @@ def game_events_occurred(self, old_game_state, self_action, new_game_state, even
         f = old_game_state['field']
         n_crates = sum(1 for (bx, by) in get_blast_coords(ox, oy, f) if f[bx, by] == 1)
         for _ in range(n_crates):
-            events.append(BOMBED_CRATES) # once per scale -> reward scales with payoff
+            events.append(BOMBED_CRATES) # once per crate -> reward scales with payoff
 
     # dense shaping: avoid back and forth 
     if old_game_state is not None and new_game_state is not None:
@@ -95,6 +106,7 @@ def end_of_round(self, last_game_state, last_action, events):
     if last_game_state['round'] % 250 == 0:
         self.model.save(f"model_round{last_game_state['round']}.npy")
 
+    self.recent_positions.clear()
     self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
     self.lr = max(self.lr_min, self.lr * self.lr_decay)
 
@@ -114,6 +126,7 @@ def reward_from_events(self, events):
         MOVED_FARTHER_FROM_COIN: -0.1,  # same magnitude
         BOMBED_CRATES: 0.3,
         ESCAPED_DANGER: 0.4,
+        STALLED: -0.3,
     }
     STEP_PENALTY = -0.02 # bc coins should be collected as fast as possible
     return STEP_PENALTY + sum(game_rewards.get(ev, 0) for ev in events)

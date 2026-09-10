@@ -30,8 +30,8 @@ def get_action_mask(game_state):
         elif danger_at(pos, dmap) == 0:
             mask[action] = False
 
-    # Never wait inside a blast zone
-    if danger_at((x,y), dmap) is not None:
+    # Never wait inside a blast zone or when is playing solo
+    if danger_at((x,y), dmap) is not None or len(others) == 0:
         mask['WAIT'] = False
 
     # Bomb
@@ -39,6 +39,11 @@ def get_action_mask(game_state):
         mask['BOMB'] = False
     elif np.sum(field == 1) == 0 and len(others) == 0:
         mask['BOMB'] = False    # nothing to gain, only risk
+
+    elif len(others) == 0 and not any(field[bx, by] == 1
+                                      for (bx, by) in get_blast_coords(x, y, field)):
+        mask['BOMB'] = False   # never spend a bomb on zero crates 
+    
     elif not escape_exists((x, y), field, bombs, others):
         mask['BOMB'] = False
 
@@ -197,16 +202,57 @@ def bfs_direction_and_distance(start, targets, field, bombs, others):
 # finds free tiles touching at least one crate
 def crate_adjacent_free_tiles(field):
     w, h = field.shape
-    out = []
+    tiers = {3: [], 2: [], 1: []}
 
     for xx in range(1, w-1):
         for yy in range(1, h-1):
             if field[xx, yy] != 0:
                 continue
-            if any(field[xx + dx, yy + dy] == 1 for dx, dy in [(1,0),(-1,0),(0,1),(0,-1)]):
-                out.append((xx, yy))
+            n = sum(1 for (bx, by) in get_blast_coords(xx, yy, field) 
+                    if field[bx, by] == 1)
+            if n >= 3:
+                tiers[3].append((xx, yy))
+            elif n == 2:
+                tiers[2].append((xx, yy))
+            elif n == 1:
+                tiers[1].append((xx, yy))
 
-    return out
+    for  t in (3, 2, 1):
+        if tiers[t]:
+            return tiers[t]
+
+    return []
+
+def bfs_all_distances(start, field, bombs, others):
+    dist = {start: (0, 'NONE')}
+    queue = deque([start])
+    neighbors = {'UP': (0, -1), 'DOWN': (0, 1), 'LEFT': (-1, 0), 'RIGHT': (1, 0)}
+    while queue:
+        pos = queue.popleft()
+        d, first = dist[pos]
+        for direction, (dx, dy) in neighbors.items():
+            npos = (pos[0] + dx, pos[1] + dy)
+            if npos in dist:
+                continue
+            if not get_walkable(field, npos[0], npos[1], bombs, others):
+                continue
+            dist[npos] = (d + 1, direction if pos == start else first)
+            queue.append(npos)
+    return dist
+
+# direction toward the spot maximising crates / (distance + cooldown) 
+def best_bomb_spot(start, field, bombs, others, cooldown=6):
+    best_score, best_dir = 0.0, 'NONE'
+    for pos, (d, first) in bfs_all_distances(start, field, bombs, others). items():
+        n = sum(1 for (bx, by) in get_blast_coords(pos[0], pos[1], field)
+                if field[bx, by] == 1)
+        if n == 0:
+            continue
+        score = n / (d + cooldown)
+        if score > best_score:
+            best_score, best_dir = score, first
+
+    return best_dir, best_score
 
 # 6. Feature: finds free safe tiles, when threatened (to escape bomb)
 def safe_free_tiles(field, bombs, explosion_map):
@@ -269,8 +315,8 @@ def state_to_features(game_state):
         coin_dist_feature = [1.0 / (coin_dist + 1)] # closer --> higher value
 
     # 5. FEATURE: Direction to nearest crate-bombing spot
-    crate_dir, _ = bfs_direction_and_distance(
-        (x, y), crate_adjacent_free_tiles(field), field, bombs, others )
+    crate_dir, _ = best_bomb_spot((x, y), field, bombs, others)
+
     crate_dir_features = [1.0 if crate_dir == d else 0.0
                           for d in ['UP', 'DOWN', 'LEFT', 'RIGHT', 'NONE']]
 
