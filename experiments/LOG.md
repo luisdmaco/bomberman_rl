@@ -6,26 +6,27 @@ newest first.
 
 ---
 
-## STATUS (2026-09-11, gate 4 passed by a specialist)
+## STATUS (2026-09-12, gate 4 passed and task 2 recovered)
 
-**Task 4 is PASSED, and it cost task 2.** Training 4000 rounds against three
-`rule_based_agent`s produced a model that beats them and is worse at everything
-else, including the base game.
-6 days to the code deadline. Nothing shippable is in `dqn-model.pt` right now.
+**Two candidates now pass gate 4, and one of them also has the best solo number
+the project has produced.** 5 days to the code deadline. `dqn-model.pt` holds
+run C's final weights, which is not the chosen checkpoint, so nothing shippable
+is in place yet.
 
-| | r3750 (task-2 weights) | **task-4 r3250** |
-|---|---|---|
-| solo `classic`, coins of 9 | **7.51** | 4.34 +/- 0.38 |
-| solo `classic`, suicide | 0.60% | **0.50%** |
-| **task 4**: us + 3 `rule_based`, margin | -1.02 +/- 0.40 | **+0.78 +/- 0.25, PASS** |
-| task 4: 1v1 vs `rule_based`, margin | -1.85 +/- 0.50 | -0.89 +/- 0.45 |
-| task 3: vs `coin_collector`, margin | **+0.17** +/- 0.47 | -0.25 +/- 0.43 |
-| task 3: vs `peaceful`, kill-in-round | **69.2%** | 37.7% |
+Solo at 300 rounds, tournament shape (us + 3 `rule_based`) at 400 unless noted:
 
-Gate 4 wants a mean score strictly above `rule_based_agent`'s. Confirmed twice:
-+0.99 +/- 0.40 over 400 rounds, then **+0.78 +/- 0.25 over 1000 rounds on a
-different seed**, whole interval [+0.53, +1.03] above zero. First gate this arm
-has passed since task 1, and the only one the spec requires.
+| model | solo coins | task-4 margin | suicide (crowded) | invalid |
+|---|---|---|---|---|
+| r3750 all-rounder | 7.65 +/- 0.24 | -1.02 +/- 0.40 (200r) fail | 42.50% | 1.00 |
+| r3250 specialist | 4.95 +/- 0.31 | +0.78 +/- 0.25 (1000r) PASS | 33.20% | 2.35 |
+| **A r3750** (mixed opponents) | 6.49 +/- 0.24 | +0.58 +/- 0.34 PASS | **15.25%** | **0.74** |
+| A r2750 (mixed opponents) | 5.18 +/- 0.29 | +0.44 +/- 0.35 PASS | 13.25% | 0.71 |
+| **C r1000** (solo refresher) | **7.87** +/- 0.19 | +0.66 +/- 0.38 PASS | 31.75% | 2.15 |
+
+Two different trades, not a ranking. C wins on score everywhere. A is far more
+disciplined: half the self-kills and a third of the invalid actions. C bought
+its score back by bombing more (46.2 solo bombs against A's 31.3), and more
+bombing in a crowded room is more ways to die.
 
 ### Gate scoreboard
 
@@ -33,44 +34,84 @@ has passed since task 1, and the only one the spec requires.
 |---|---|---|
 | 1, `coin-heaven` | 45 of 50 coins, 0 invalid | **PASSED** 06.09, 46.06 coins |
 | 2, `classic` survival | suicide < 2% | **PASSED** 09.09, 0.60% over 1000 rounds |
-| 2, `classic` coins | 8 of 9 | not passed: 7.51 (r3750), 4.34 (r3250) |
-| 3, vs `peaceful` | kill in >= 80% of rounds | not passed: 69.2% best |
-| 3, vs `coin_collector` | positive margin | not passed: +0.17 +/- 0.47, a tie |
-| **4, vs `rule_based`** | **mean score strictly above** | **PASSED** in the tournament shape |
+| 2, `classic` coins | 8 of 9 | not passed, best now **7.87** (C r1000), was 7.51 |
+| 3, vs `peaceful` | kill in >= 80% of rounds | not passed, best 69.2% (r3750). Being re-measured for A and C |
+| 3, vs `coin_collector` | positive margin | not passed, best +0.17 +/- 0.47. Being re-measured |
+| **4, vs `rule_based`** | **mean score strictly above** | **PASSED** by three checkpoints |
 
 Tasks 1 to 3 and their thresholds are our own curriculum. Task 4 is the spec's.
 
-### The two lessons this project ends on
+### NOT MEASURED YET. Start here.
+
+These were queued and then stopped unfinished on 2026-09-12. Nothing below has
+a number; do not quote any of it. Everything needed to get them is in place:
+both candidates are archived under `models/` (see below) and
+`tools/evaluate3.py` takes `DQN_MODEL_FILE` as an absolute path.
+
+```
+M=$PWD/models/task4-C-solo-refresh-r1000-ego13.pt   # or the A model
+# 1. gate 4 at 1000 rounds (rule 4: re-measure near a threshold)
+DQN_MODEL_FILE=$M python tools/evaluate3.py --agents dqn_agent \
+  rule_based_agent rule_based_agent rule_based_agent \
+  --scenario classic --n-rounds 1000 --seed 77
+# 2. the task-2 coin number at 1000 rounds (currently 7.87 +/- 0.19 at n=300)
+DQN_MODEL_FILE=$M python tools/evaluate3.py --agents dqn_agent \
+  --scenario classic --n-rounds 1000 --seed 55
+# 3. the two task-3 gates
+DQN_MODEL_FILE=$M python tools/evaluate3.py --agents dqn_agent peaceful_agent \
+  --scenario classic --n-rounds 300 --gate 3
+DQN_MODEL_FILE=$M python tools/evaluate3.py --agents dqn_agent coin_collector_agent \
+  --scenario classic --n-rounds 400 --gate 3
+```
+
+Run all four for **both** candidates. The task-3 numbers matter most: they
+regressed hard for the specialist (kill-in-round 69.2% -> 37.7%) and whether
+either run repaired that is completely unknown.
+
+### The two candidate models, archived
+
+| file | what it is |
+|---|---|
+| `models/task4-C-solo-refresh-r1000-ego13.pt` | run C. Best solo coins (7.87), gate 4 +0.66, but 31.75% suicide and 2.15 invalid in crowded games |
+| `models/task4-A-mixed-r3750-ego13.pt` | run A. Solo coins 6.49, gate 4 +0.58, and much more disciplined: 15.25% suicide, 0.74 invalid |
+| `models/task4-classic-r3250-ego13.pt` | the specialist both were built from. Gate 4 +0.78 at 1000 rounds, solo coins only 4.95 |
+| `models/task2-classic-r3750-ego13.pt` | the task-2 all-rounder. Solo coins 7.65, fails gate 4 at -1.02 |
+
+All four are gitignored and need `git add -f`.
+
+### The three lessons this project ends on
 
 **Signal density decides what can be learned, and it is a property of the
-opponent, not of us.** `rule_based_agent` walks toward opponents and bombs them,
-so it puts itself in blasts we were already setting off: 258 kills over the run,
-rising from 0.010 to 0.147 per round. `coin_collector_agent` ignores us and
-farms crates elsewhere: 81 kills, flat. Same reward table, same 4000 rounds,
-opposite outcomes.
+opponent.** Same reward table, same 4000 rounds: `rule_based_agent` walks into
+your blasts and gave 258 kills rising from 0.010 to 0.147 per round;
+`coin_collector_agent` ignores you and gave 81, flat. The first taught the agent
+to fight, the second taught it to hide.
 
-**Training against one opponent buys a specialist.** Every non-training
-measurement went backwards, including solo coin collection, which fell 7.51 to
-4.34. Worth stating plainly in the report; it is the cleanest result we have.
+**Training against one opponent buys a specialist, and the mechanism is
+measurable.** The specialist's whole solo deficit was bombing rate: 26.5 bombs
+against 47.6. Every non-training measure regressed, invisibly from the training
+curve. Measure every gate after every run.
+
+**A tiny corrective run can undo it.** 1500 solo rounds at a fifth of the
+learning rate, 7.6 minutes, recovered solo coins from 4.95 to 7.87 while keeping
+the gate. I predicted it would swing back and lose the gate. It did neither.
 
 ### What is left, in order
 
-1. **Decide which model ships** and put it in `dqn-model.pt`. Right now that
-   file holds task-4 r4000, which is neither candidate.
-2. **Re-run the submission test** against stock `settings.py`, no `DQN_*` set,
-   `train=False`, 3 random opponents. Passed on 09.09 with a different model.
-3. Archive `task4-classic-r3250-ego13.pt` under `models/` with `git add -f`.
-4. The report. Two models with a measured trade-off, five bugs that each made a
-   wrong number look like a result, and two negative results (augmentation
-   implemented but never run, opponent training backfiring on task 3).
+1. **Decide which candidate ships**, C r1000 or A r3750, and put it in
+   `dqn-model.pt`.
+2. **Re-run the submission test**: stock `settings.py`, no `DQN_*`, `train=False`,
+   3 random opponents. Last passed 09.09 with a different model.
+3. Archive the chosen checkpoint under `models/` with `git add -f`.
+4. The report.
 
 ### Reference numbers
 
 | | |
 |---|---|
 | Task 1 best (frozen) | 47.39 coins in 234 steps |
-| Reference `rule_based_agent`, solo `classic` | 8.60 coins, 0.00% suicide |
-| Reference `rule_based_agent`, tournament shape | 3.30 mean score |
+| `rule_based_agent`, solo `classic` | 8.60 coins, 0.00% suicide |
+| `rule_based_agent`, tournament shape | 3.30 mean score, 6.9 invalid actions/round |
 | Random walk, `coin-heaven` | ~18 coins |
 | Submission dry run | PASSED 09.09, 0 crashes, 0.73 ms/step against 500 ms |
 | Augmentation ablation | implemented, tested, never run |
@@ -210,7 +251,7 @@ scores.
 | `tools/evaluate.py` | Measures one agent frozen, against a gate. Works on any agent, not just the DQN. |
 | `tools/evaluate3.py` | Per-agent, per-round measurement. The only tool that can answer a gate with an opponent on the board, because the framework's own round statistics are summed over all agents. `--gate 3`. |
 | `tools/test_others.py` | 41 checks that the agent actually perceives opponents: channel 3, the ego crop, opponents' bombs as danger, opponents' bodies as blocked tiles, and a live game against `peaceful_agent`. |
-| `tools/train_curve.py` | One continuous training run with checkpoints, then an honest frozen curve from them. `--opponents` puts them in the training game and in every evaluation, and switches the curve to the task-3 columns. |
+| `tools/train_curve.py` | One continuous training run with checkpoints, then an honest frozen curve from them. `--opponents` sets who is in the training game; `--eval-opponents` sets who the frozen curve is measured against, which should be the gate's opponents and not the training ones. |
 | `tools/compare.py` | Evaluates every sweep configuration frozen, in parallel, into one table. Applies each config's own settings, so a global-view model is not evaluated with an egocentric network. |
 | `tools/confirm.py` | Re-measures the leaders over 200 rounds instead of 40, and only calls PASS when the whole interval clears the bar. |
 | `tools/sweep.py` | Runs several configurations at once, one core each. |
@@ -330,6 +371,96 @@ over the first half and the second half exploits.
 ---
 
 # Part 2 — Log
+
+## 2026-09-12 - Two ways out of the specialist trap, and the cheap one won
+
+Two runs, both resumed from `task4-classic-r3250-ego13.pt`, the specialist that
+passes gate 4 but collects 4.95 coins solo against r3750's 7.65.
+
+| | what it changed | rounds | wall clock |
+|---|---|---|---|
+| **A** | opponents: `rule_based`, `rule_based`, `peaceful` instead of 3x `rule_based` | 4000 | 21.4 min |
+| **C** | solo board, `DQN_LR=2e-4`, `DQN_EPS_START=0.1` | 1500 | **7.6 min** |
+
+Both curves measured against three `rule_based_agent`s regardless of what they
+trained on, using the new `--eval-opponents`. That flag exists because of
+2026-09-11: measuring only what you trained against is how a specialist gets
+mistaken for a better agent.
+
+### The diagnosis that pointed at both runs
+
+Solo, 300 frozen rounds, the specialist against its parent:
+
+| | coins | crates | **bombs** | suicide |
+|---|---|---|---|---|
+| r3750 | 7.65 | 114.7 | **47.6** | 1.00% |
+| r3250 specialist | 4.95 | 90.8 | **26.5** | 0.00% |
+
+It was not lost, looping or dying. It dropped barely half as many bombs. Four
+thousand rounds of being punished by `rule_based_agent`s taught it caution, and
+solo that caution is pure loss: a bomb not dropped is a coin not collected. It
+had the information to tell the situations apart, channel 3, and no reason to
+learn the distinction because it never saw an empty board.
+
+### Confirmed results
+
+Solo at 300 rounds, tournament shape at 400 unless noted:
+
+| model | solo coins | solo bombs | task-4 margin | suicide (crowded) | invalid |
+|---|---|---|---|---|---|
+| r3750 all-rounder | **7.65** +/- 0.24 | 47.6 | -1.02 +/- 0.40 (200r) fail | 42.50% | 1.00 |
+| r3250 specialist | 4.95 +/- 0.31 | 26.5 | +0.78 +/- 0.25 (1000r) PASS | 33.20% | 2.35 |
+| **A r3750** | 6.49 +/- 0.24 | 31.3 | +0.58 +/- 0.34 PASS | **15.25%** | **0.74** |
+| A r2750 | 5.18 +/- 0.29 | 27.2 | +0.44 +/- 0.35 PASS | 13.25% | 0.71 |
+| **C r1000** | **7.87** +/- 0.19 | 46.2 | +0.66 +/- 0.38 PASS | 31.75% | 2.15 |
+
+**All three new checkpoints pass gate 4**, and the bombing-rate column tracks
+the solo coins almost exactly, which is the diagnosis confirming itself.
+
+**C is the result.** 7.6 minutes of solo training at a fifth of the learning
+rate recovered solo coins to 7.87, *above* the 7.65 it started life at and the
+best number this project has produced, while keeping the task-4 margin at +0.66
+with the whole interval above zero. I predicted the opposite: "standard result
+is that it swings back and loses the gate". It did neither. Best value per
+minute of any run in this log.
+
+**A did a different job.** Mixed opponents recovered solo coins only partly,
+4.95 to 6.49, but halved self-kills in the crowded game, 33.2% to 15.25%, and
+cut invalid actions from 2.35 to 0.74 per round, the cleanest of any model in
+that shape.
+
+The two are not ranked, they are different trades. C wins on score everywhere.
+A is markedly more disciplined. C got its score back by bombing more (46.2
+bombs against A's 31.3), and more bombing in a crowded room is more ways to
+die, which is exactly where its 31.75% comes from. If the report leads with
+score, C. If it leads with the survival story the spec emphasises, A.
+
+### Queued, then stopped unfinished on 2026-09-12
+
+None of the following has a number. The measurements were started and stopped
+before any of them completed, so there is nothing to quote and nothing to
+recover; they have to be run again. The commands are in the STATUS block.
+
+- C r1000, task-4 margin at **1000** rounds on seed 77 (rule 4: re-measure near
+  a threshold before claiming a pass).
+- C r1000, **solo at 1000 rounds**. At 7.87 +/- 0.19 the interval is
+  [7.68, 8.06] and the task-2 coin gate is 8, so the point estimate cannot pass,
+  but this is the number that goes in the report and it deserves n=1000.
+- C r1000 and A r3750 against `peaceful_agent` and `coin_collector_agent`, the
+  two task-3 gates. Both regressed badly for the specialist (69.2% -> 37.7%
+  kill-in-round) and it is an open question whether either run repaired that.
+
+### Operational note: the device file transfer is not trustworthy
+
+Twice now, writing a tool file to the Mac reported success and left the old
+content in place, and the second time it silently **reverted** a fix that had
+been verified present an hour earlier. The `max()` versus mean margin fix was
+lost that way. Both times the reliable route was to edit the file on the Mac
+directly and then read the patched lines back off disk.
+
+Rule from it, on top of 2026-09-11's "every scripted edit gets an assertion":
+**verify by reading the file that will actually run, after it has been written.**
+Not the copy that was sent, and not the tool that shares the bug.
 
 ## 2026-09-11 - Gate 4 passes, and it cost us task 2
 
