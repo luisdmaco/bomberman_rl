@@ -6,72 +6,74 @@ newest first.
 
 ---
 
-## STATUS (2026-09-09, on the real task-2 board)
+## STATUS (2026-09-11, gate 4 passed by a specialist)
 
-**Half of gate 2 is passed on `classic`, the real board.** Over 1000 frozen
-rounds `r3750` scores **7.51 of 9 coins** with a **0.60% suicide rate (95% upper
-bound 1.30%)** and zero invalid actions. Survival gate: PASSED. Coin gate: 0.49
-short of 8.
-12 days to the code deadline, 8 to the crash test.
+**Task 4 is PASSED, and it cost task 2.** Training 4000 rounds against three
+`rule_based_agent`s produced a model that beats them and is worse at everything
+else, including the base game.
+6 days to the code deadline. Nothing shippable is in `dqn-model.pt` right now.
+
+| | r3750 (task-2 weights) | **task-4 r3250** |
+|---|---|---|
+| solo `classic`, coins of 9 | **7.51** | 4.34 +/- 0.38 |
+| solo `classic`, suicide | 0.60% | **0.50%** |
+| **task 4**: us + 3 `rule_based`, margin | -1.02 +/- 0.40 | **+0.78 +/- 0.25, PASS** |
+| task 4: 1v1 vs `rule_based`, margin | -1.85 +/- 0.50 | -0.89 +/- 0.45 |
+| task 3: vs `coin_collector`, margin | **+0.17** +/- 0.47 | -0.25 +/- 0.43 |
+| task 3: vs `peaceful`, kill-in-round | **69.2%** | 37.7% |
+
+Gate 4 wants a mean score strictly above `rule_based_agent`'s. Confirmed twice:
++0.99 +/- 0.40 over 400 rounds, then **+0.78 +/- 0.25 over 1000 rounds on a
+different seed**, whole interval [+0.53, +1.03] above zero. First gate this arm
+has passed since task 1, and the only one the spec requires.
+
+### Gate scoreboard
+
+| task | gate | status |
+|---|---|---|
+| 1, `coin-heaven` | 45 of 50 coins, 0 invalid | **PASSED** 06.09, 46.06 coins |
+| 2, `classic` survival | suicide < 2% | **PASSED** 09.09, 0.60% over 1000 rounds |
+| 2, `classic` coins | 8 of 9 | not passed: 7.51 (r3750), 4.34 (r3250) |
+| 3, vs `peaceful` | kill in >= 80% of rounds | not passed: 69.2% best |
+| 3, vs `coin_collector` | positive margin | not passed: +0.17 +/- 0.47, a tie |
+| **4, vs `rule_based`** | **mean score strictly above** | **PASSED** in the tournament shape |
+
+Tasks 1 to 3 and their thresholds are our own curriculum. Task 4 is the spec's.
+
+### The two lessons this project ends on
+
+**Signal density decides what can be learned, and it is a property of the
+opponent, not of us.** `rule_based_agent` walks toward opponents and bombs them,
+so it puts itself in blasts we were already setting off: 258 kills over the run,
+rising from 0.010 to 0.147 per round. `coin_collector_agent` ignores us and
+farms crates elsewhere: 81 kills, flat. Same reward table, same 4000 rounds,
+opposite outcomes.
+
+**Training against one opponent buys a specialist.** Every non-training
+measurement went backwards, including solo coin collection, which fell 7.51 to
+4.34. Worth stating plainly in the report; it is the cleanest result we have.
+
+### What is left, in order
+
+1. **Decide which model ships** and put it in `dqn-model.pt`. Right now that
+   file holds task-4 r4000, which is neither candidate.
+2. **Re-run the submission test** against stock `settings.py`, no `DQN_*` set,
+   `train=False`, 3 random opponents. Passed on 09.09 with a different model.
+3. Archive `task4-classic-r3250-ego13.pt` under `models/` with `git add -f`.
+4. The report. Two models with a measured trade-off, five bugs that each made a
+   wrong number look like a result, and two negative results (augmentation
+   implemented but never run, opponent training backfiring on task 3).
+
+### Reference numbers
 
 | | |
 |---|---|
 | Task 1 best (frozen) | 47.39 coins in 234 steps |
-| Task 2 gate | suicide < 2%, 8 of 9 coins |
-| **Task 2 best** (`classic` r3750, **1000 rounds**) | **7.51 coins** [7.37, 7.65], **0.60%** suicide (95% upper 1.30%), 70.6% reach 8+ |
-| runner-up (`classic` r3000) | 7.74 coins, 3.00% suicide, 72.7% reach 8+ |
-| safest (`classic` r4000) | 6.34 coins, **0.33%** suicide (95% upper bound 1.86%) |
-| Reference `rule_based_agent`, same board | 8.60 coins, 0.00% suicide, 93.0% reach 8+ |
-
-The agent does **better** on `classic` (119 crates) than on `crate-light`
-(56 crates): 7.76 against 7.02-7.48. More crates means more coins found per
-bomb, and the coin count is 9 either way.
-
-Archived as `models/task2-classic-r3750-ego13.pt`.
-
-### What is left, precisely
-
-0.49 coins. The suicide half is settled: 0.60% over 1000 rounds, whole interval
-under the 2% limit.
-
-The reference agent reaches 8+ in 93% of rounds against our 75%, and gets 8.60
-coins, so the gate is achievable on this board but not by much margin.
-
-### Before the 17.09 upload: check which weights are in `dqn-model.pt`
-
-`agent_code/dqn_agent/dqn-model.pt` is the file that ships and the only one the
-tournament loads. It is *currently* the `crate-light` r6000 weights, because the
-augmentation ablation was set up to resume from exactly what the baseline
-`classic` run resumed from. **It is not the best agent right now.** Before the
-submission it must be set to whichever model wins, e.g.
-
-```
-cp models/task2-classic-r3750-ego13.pt agent_code/dqn_agent/dqn-model.pt
-python tools/evaluate.py --agents dqn_agent --scenario classic --n-rounds 200
-```
-
-Model archives under `models/` are gitignored and have to be added with
-`git add -f`, the same way the two task-1 models were.
-
-### Submission test: passed a dry run 8 days early
-
-Stock settings, no environment variables, `train=False`, three random opponents:
-0 crashes, 0 invalid actions, 0.73 ms/step. See the (night, 6) entry.
-
-### Next lever: symmetry augmentation, now implemented
-
-`crate-light` training is exhausted and `classic` converged by round 2500, so
-the remaining problem is sample efficiency. Daniela's 8-fold dihedral
-augmentation is in and tested (see the (night, 7) entry); the ablation run is
-set up to differ from the baseline by one flag.
-
-```
-DQN_VIEW="ego:13" DQN_AUGMENT=1 DQN_EPS_START=0.3 DQN_EPS_DECAY=2000 \
-  python tools/train_curve.py --rounds 4000 --checkpoint-every 250 \
-  --eval-rounds 40 --scenario classic --resume
-```
-
-After it, task 3 regardless of the result.
+| Reference `rule_based_agent`, solo `classic` | 8.60 coins, 0.00% suicide |
+| Reference `rule_based_agent`, tournament shape | 3.30 mean score |
+| Random walk, `coin-heaven` | ~18 coins |
+| Submission dry run | PASSED 09.09, 0 crashes, 0.73 ms/step against 500 ms |
+| Augmentation ablation | implemented, tested, never run |
 
 ---
 
@@ -93,12 +95,23 @@ Gate: suicide rate under 2% over 200 rounds, and 8 of 9 coins on average.
 the tournament setting.
 Status: set up and verified, not trained.
 
-**Task 3.** Against `peaceful_agent` and `coin_collector_agent`.
-Gate: kills the peaceful agent in 80% of rounds; positive margin vs the coin
-collector. Not started.
+**Task 3.** Against `peaceful_agent` and `coin_collector_agent`, one opponent
+at a time.
+Gate: kills the peaceful agent in >= 80% of rounds; positive margin vs the coin
+collector.
+Status: baseline measured 2026-09-10 with the task-2 weights, neither half
+passed. 74.5% and -0.54. Note that the framework's round statistics sum `coins`,
+`kills` and `suicides` over *all* agents, so from this task onward
+`tools/evaluate.py` cannot answer either gate; use `tools/evaluate3.py`.
 
-**Task 4.** Against `rule_based_agent` and self-play.
-Gate: mean score above `rule_based_agent` over 200 rounds. Not started.
+**Task 4.** Against `rule_based_agent` and self-play. **This is the only gate the
+spec actually requires**; tasks 1 to 3 and their thresholds are our own
+curriculum. The spec calls beating `rule_based_agent` the entry ticket.
+Gate: mean score above `rule_based_agent` over 200 rounds.
+Status: baseline measured 2026-09-10 with the task-2 weights. Not passed:
+-1.85 +/- 0.50 one against one, -1.02 +/- 0.40 in the tournament shape.
+Measure it with `tools/evaluate3.py`; note the framework renames duplicate
+opponents to `rule_based_agent_0/_1/_2`.
 
 For task 2 onward, **coins are the wrong thing to watch.** Track
 `suicidal_bombs` and `crates`.
@@ -195,7 +208,9 @@ scores.
 | Script | What it does |
 |---|---|
 | `tools/evaluate.py` | Measures one agent frozen, against a gate. Works on any agent, not just the DQN. |
-| `tools/train_curve.py` | One continuous training run with checkpoints, then an honest frozen curve from them. |
+| `tools/evaluate3.py` | Per-agent, per-round measurement. The only tool that can answer a gate with an opponent on the board, because the framework's own round statistics are summed over all agents. `--gate 3`. |
+| `tools/test_others.py` | 41 checks that the agent actually perceives opponents: channel 3, the ego crop, opponents' bombs as danger, opponents' bodies as blocked tiles, and a live game against `peaceful_agent`. |
+| `tools/train_curve.py` | One continuous training run with checkpoints, then an honest frozen curve from them. `--opponents` puts them in the training game and in every evaluation, and switches the curve to the task-3 columns. |
 | `tools/compare.py` | Evaluates every sweep configuration frozen, in parallel, into one table. Applies each config's own settings, so a global-view model is not evaluated with an egocentric network. |
 | `tools/confirm.py` | Re-measures the leaders over 200 rounds instead of 40, and only calls PASS when the whole interval clears the bar. |
 | `tools/sweep.py` | Runs several configurations at once, one core each. |
@@ -213,6 +228,20 @@ This is the one that matters.
 | `ci95` | Half-width of the 95% confidence interval | Smaller is more certain. If two points overlap, they are not different. |
 | `mean_steps` | Steps per round | **400 means it never finished.** Dropping toward ~150 means it is collecting everything and ending early. This is a great early signal. |
 | `invalid_per_round` | Times it walked into a wall | Should go to ~0 |
+
+With `--opponents`, four more columns appear and `frozen_coins` stops being the
+headline, because somebody else is collecting them too:
+
+| Column | Meaning | What good looks like |
+|---|---|---|
+| `suicide_rate` | Share of rounds ending in our own bomb | Must fall. Baseline vs `coin_collector` is 13.25% |
+| `kill_in_round` | Share of rounds with at least one kill | Gate 3 wants >= 80% against `peaceful_agent` |
+| `score_margin` | Our score minus the best opponent's, per round | Gate 3 wants this positive |
+| `margin_ci95` | Half-width of its 95% interval | At 40 eval rounds this is about +/- 2. The curve is a shortlist, not a measurement. |
+
+A 40-round curve point is noisy enough that the same weights measured twice gave
+3.48 coins / 24% suicide and 4.28 coins / 8% suicide. Shortlist from the curve,
+then confirm with `tools/evaluate3.py` at 200 rounds or more.
 
 A flat `frozen_coins` means it is not learning. A `mean_steps` stuck at exactly
 400.0 means it is never clearing the board.
@@ -267,8 +296,9 @@ environment at all, so every default here must be the one we want to ship.
 | `DQN_SHAPING` | `1` | `0` for the ablation. |
 | `DQN_SHAPING_SCALE` / `_GAMMA` / `_CAP` | `0.05` / `1.0` / `10` | See 2026-09-05: the discounted, uncapped version paid the agent to idle. |
 | `DQN_CHECKPOINT_EVERY` | `0` | Numbered snapshots. The curve tools set it. |
-| `DQN_MODEL_FILE` | agent's own | Point evaluation at one specific checkpoint. |
+| `DQN_MODEL_FILE` | agent's own | Point evaluation at one specific checkpoint. A relative path is resolved **against the repo root, not the shell's working directory**, and a path that does not exist raises. Both are scars; see 2026-09-10. |
 | `DQN_RESUME` | `0` | Continue from existing weights. |
+| `DQN_OPPONENT_MASK` | `1` at play, `0` in training | Widen the survivability mask: an escape route an opponent can occupy first is not an escape. Measured 2026-09-10: self-kills 20.25% -> 13.25% against `coin_collector_agent`. |
 | `DQN_PLAY_EPSILON` | `0.0` | Noise at play time. A patch, not a fix. |
 | `DQN_THREADS` | `1` | One thread per process; run processes in parallel instead. |
 | `DQN_SEED` | `-1` | Set for a reproducible run. |
@@ -300,6 +330,634 @@ over the first half and the second half exploits.
 ---
 
 # Part 2 — Log
+
+## 2026-09-11 - Gate 4 passes, and it cost us task 2
+
+4000 rounds on `classic` against three `rule_based_agent`s, resumed from r3750,
+`DQN_EPS_START=0.3`, `DQN_EPS_DECAY=2000`. 22.7 minutes. One variable from the
+task-3 run: the opponent.
+
+### The gate
+
+`models/task4-classic-r3250-ego13.pt`, frozen, in the tournament shape:
+
+| | rounds | seed | our score | `rule_based` | margin |
+|---|---|---|---|---|---|
+| shortlist from the curve | 40 | - | | | +1.23 +/- 1.08 |
+| confirmation | 400 | 41 | 4.24 | 3.25 | **+0.99** +/- 0.40 |
+| re-confirmation | **1000** | **77** | 4.08 | 3.30 | **+0.78** +/- 0.25 |
+
+**Gate 4 PASSED.** The whole interval, [+0.53, +1.03], is above zero at 1000
+rounds on a seed the model was not shortlisted on. Baseline r3750 in the same
+shape is -1.02 +/- 0.40.
+
+That is the first gate this arm has passed since task 1, and the only one the
+spec actually requires.
+
+### It is a specialist, and that is the real finding
+
+Same weights, everything else we measure:
+
+| | r3750 (task-2 weights) | **task-4 r3250** |
+|---|---|---|
+| solo `classic`, coins (task-2 gate) | **7.51** | **4.34** +/- 0.38 |
+| solo `classic`, suicide | 0.60% | **0.50%** |
+| solo `classic`, invalid actions | 0 | 0 |
+| tournament shape, margin | -1.02 +/- 0.40 | **+0.78** +/- 0.25 |
+| 1v1 vs `rule_based`, margin | -1.85 +/- 0.50 | -0.89 +/- 0.45 |
+| vs `coin_collector`, margin | **+0.17** +/- 0.47 | -0.25 +/- 0.43 |
+| vs `peaceful`, kill-in-round | **69.2%** | 37.7% |
+| vs `peaceful`, margin | **+10.80** | +6.58 |
+
+It beats three `rule_based_agent`s and is worse at everything else, including
+the base game it was built on. Solo coin collection fell from 7.51 of 9 to 4.34.
+Both task-3 numbers went backwards. This is opponent-distribution overfitting,
+measured cleanly, with the before and after on seven different boards. For a
+report whose whole point is comparing two learning approaches, that is a better
+result than a model that is quietly good at one thing.
+
+Bomb safety did **not** degrade: solo suicide 0.50% against 0.60%, and 33.2%
+against 42.5% in the crowded game. The agent got safer and narrower at once.
+
+### My prediction was wrong, and here is the part I got wrong
+
+Written before the run: margin around -0.4 to -0.6, self-kills down, coins down,
+"an improvement that still does not pass", and that anything much better needs
+explaining. The margin came out **+0.78**.
+
+What I got right: deaths down (42.5% to 33.2%), coins roughly flat in that
+shape, avoidance being worth points here.
+
+What I got wrong, and why. I priced the kill signal at the **baseline** rate of
+0.115 kills per round and treated it as fixed. It was not fixed: during training
+it climbed from 0.010 to 0.147 per round, and frozen it reached 0.366. The
+margin gained almost entirely through kills, exactly the channel I had written
+off.
+
+| run | total kills over 4000 rounds | deaths per kill | kills/round, first -> last block |
+|---|---|---|---|
+| task 3, vs `coin_collector` | 81 | 46 to 1 | 0.003 -> 0.025, flat |
+| task 4, vs 3x `rule_based` | **258** | 14.7 to 1 | 0.010 -> **0.147**, rising |
+
+So the refinement to this morning's lesson: **signal density is a property of the
+opponent's behaviour, not just of our policy.** `rule_based_agent` walks toward
+opponents and bombs them, so it puts itself inside blasts we are already
+setting off. `coin_collector_agent` ignores us entirely and farms crates
+somewhere else. An opponent that comes to you is a dense teacher, and one that
+ignores you cannot teach you to fight no matter how long you train.
+
+The other half of the miss is plainer: I priced the gain and never priced the
+cost. Nothing in my prediction asked what 4000 rounds of three-opponent boards
+would do to solo coin collection, and the answer was -3.17 coins.
+
+### One number worth watching
+
+Invalid actions per round, which have been 0.00 all project:
+
+| | ours | `rule_based`'s |
+|---|---|---|
+| solo | 0.000 | - |
+| tournament shape, r3750 | 1.005 | 6.87 |
+| tournament shape, r3250 | 2.348 | 6.92 |
+
+Not a defect introduced by training: in a crowded game an opponent can step into
+the tile we chose after `legal_actions` judged it free, and the reference agent
+eats 6.9 of these per round to our 2.3. Still, ours doubled, and gate 1's
+standard was zero. Worth a sentence in the report rather than silence.
+
+### Decision this leaves
+
+Two models, a clean trade-off, and 6 days:
+
+| | r3750 | r3250 |
+|---|---|---|
+| passes | task 1, task-2 survival | **task 4** |
+| fails | task 4, task-3 margin | task-2 coins, both task-3 numbers |
+
+`agent_code/dqn_agent/dqn-model.pt` currently holds the task-4 r4000 weights,
+which are neither of these. Whatever ships has to be copied in and re-tested
+against stock settings before 17.09.
+
+## 2026-09-10 (night) - Task 4 baseline, and the margin taken apart
+
+`models/task2-classic-r3750-ego13.pt`, frozen, mask on, no task-4 training. Two
+setups, because the gate does not say which and they disagree about *why* we
+lose.
+
+| | our score | `rule_based` | margin | our suicide | they killed us | our kills |
+|---|---|---|---|---|---|---|
+| 1v1, 400 rounds | 3.99 | 5.84 | **-1.85** +/- 0.50 | **38.25%** | 17.5% of rounds | 4.2% of rounds |
+| us + 3 `rule_based`, 200 rounds | 2.56 | 3.58 (mean of 3) | **-1.02** +/- 0.40 | **42.50%** | 74.5% of rounds | 11.5% of rounds |
+
+Neither passes. The suicide rate completes a pattern that has held all day: the
+better the opponent, the more the agent kills itself.
+
+| opponent | our suicide rate |
+|---|---|
+| nobody (solo `classic`) | 0.60% |
+| `peaceful_agent` | 3.50% |
+| `coin_collector_agent` | 13.25% |
+| `rule_based_agent` | **38.25%** |
+
+### Where the margin actually comes from
+
+Score is `coins + 5 x kills`, so the margin splits cleanly:
+
+| | margin from coins | margin from kills | total |
+|---|---|---|---|
+| 1v1 | **-1.19** | -0.66 | -1.85 |
+| tournament shape | -0.35 | **-0.67** | -1.02 |
+
+Two different problems wearing the same number. One against one we are simply
+out-collected, which is the task-2 gate we never passed showing through: solo we
+get 7.51 coins on `classic` and `rule_based_agent` gets 8.60. In the tournament
+shape the coin gap nearly vanishes, because nine coins split four ways leaves
+little to be better at, and almost the whole deficit is that **they kill us and
+we do not kill them**. Every death we hand over is worth 5 points to somebody.
+
+### And unlike task 3, suicide is not the whole story
+
+Splitting the rounds the same way as this morning:
+
+| | 1v1 margin | tournament margin |
+|---|---|---|
+| rounds we survived | -1.49 | -1.03 |
+| rounds we self-killed | -2.42 | -1.01 |
+| **if the self-kill rounds went like the survivors** | **-1.49, still fails** | **-1.03, still fails** |
+
+Against `coin_collector` the whole deficit was suicides. Against
+`rule_based_agent` it is not: even a perfect-survival version of this agent
+loses. That is a capability gap, not a safety gap.
+
+### Masking is exhausted
+
+Re-priced the escape-check candidates against `rule_based_agent`, 120 rounds, 48
+fatal bombs. Every candidate blocked **0 of 48**, and 0 of 4298 survived bombs.
+
+That is not a negative result about the idea; the play-time opponent-aware mask
+is already switched on in these games, so the bombs it would catch never reach
+the sample. What it says is that the remaining 38% of self-kills all pass a check
+that knows where the opponents are and where they can walk. The escape exists
+when the bomb is dropped and the policy fails to walk it. No masking change fixes
+that. Training does, or nothing does.
+
+### The prediction for the next run, written down before it is spent
+
+Applying this morning's lesson: price the reward *stream*, not the reward table.
+In the tournament shape the agent takes roughly 1.2 deaths per round and scores
+0.115 kills, so the opponent-related signal runs about **10 to 1 toward
+avoidance**. That is the same shape that made the task-3 run go backwards.
+
+The difference, and it is the reason this run is still worth spending: **for
+task 4 avoidance is worth points.** The gate is a score margin, every death we
+avoid denies an opponent 5 points, and -0.67 of the -1.02 is exactly that. In
+task 3 the gate wanted aggression and the reward taught caution, so the two
+fought. Here they point the same way.
+
+So the prediction, to be checked rather than reinterpreted afterwards: self-kills
+fall substantially, our coins fall somewhat, the kill component of the margin
+improves by most of 0.67, and the total margin lands somewhere around -0.4 to
+-0.6. **That is an improvement that still does not pass.** If it comes out much
+better than that, something else is going on and it needs explaining. If it comes
+out worse, avoidance training is exhausted as an idea and the honest move is to
+stop running and write up.
+
+### The evaluation phase crashed, and it was my bug twice over
+
+`KeyError: 'rule_based_agent'` on the first checkpoint, after 22.7 minutes of
+training had already completed. The training is fine and the 16 checkpoints are
+on disk; only the curve had to be rebuilt with `--eval-only`.
+
+The cause is the duplicate-renaming described above. I found that problem before
+the run, patched both tools, and then **verified the wrong one**: the edit to
+`tools/evaluate3.py` had an assertion and applied, the second edit to
+`tools/train_curve.py` was a plain `str.replace` with no assertion, its anchor
+did not match, and it silently did nothing. I then ran a four-agent game through
+`evaluate3.py`, saw it pass, and called both fixed.
+
+Two rules out of it, both of which this project already knew in other forms:
+
+- **Every scripted edit gets an assertion.** A `replace` that matches nothing
+  returns the original string and reports success, which is the same failure
+  shape as every silent measurement bug in this log.
+- **Verify the tool that is about to run**, not a tool that shares the bug.
+
+Both files are now fixed and the fix was confirmed by reading the patched lines
+back off disk, not by trusting the write.
+
+While fixing it, a second and more consequential error in the same function:
+the margin was computed against `max()` of the opponents' scores. Gate 4 says
+"mean score strictly above `rule_based_agent`'s", which means a typical
+opponent, not the luckiest one in each round. With three opponents `max()` reads
+about 2.5 points harsher, so the curve would have reported roughly -3.8 where
+the gate reads -1.0, and every checkpoint would have looked hopeless. It now
+compares against the mean, which reproduces the -1.02 baseline. That one would
+not have crashed. It would just have been wrong.
+
+### Tooling fix this needed
+
+`tools/evaluate3.py` and `tools/train_curve.py` both indexed results by the agent
+names passed on the command line. The framework renames duplicates, so three
+`rule_based_agent` entries come back as `rule_based_agent_0`, `_1` and `_2`, and
+both tools raise `KeyError` on the first checkpoint of a tournament shaped run.
+They now read the keys the rows actually carry. (`evaluate3.py` was fixed before
+the run; `train_curve.py` was not, despite my saying it was. See the next
+section.)
+
+## 2026-09-10 (evening) - The first task-3 training run, and why it went backwards
+
+4000 rounds on `classic` against `coin_collector_agent`, resumed from r3750,
+`DQN_EPS_START=0.3`, `DQN_EPS_DECAY=2000`. One variable changed from the run
+that produced r3750: an opponent in the game. No reward change, deliberately, so
+that a null result would be interpretable. 19.7 minutes on the M3 Max.
+
+### The training itself worked
+
+| rounds | steps | coins | crates | suicidal bombs | reward | epsilon |
+|---|---|---|---|---|---|---|
+| 1-1000 | 29 | 0.41 | 14.0 | 0.016 | +2.72 | 0.269 -> |
+| 1001-2000 | 79 | 1.24 | 31.2 | 0.015 | +20.75 | |
+| 2001-3000 | 146 | 2.28 | 48.0 | 0.048 | +40.97 | 0.050 |
+| 3001-4000 | 144 | 2.20 | 47.6 | 0.033 | +40.66 | 0.050 |
+
+Learning curve rose and flattened by round 2500, same shape as every previous
+run. Epsilon annealed cleanly, the buffer filled and stayed at 50000, suicidal
+bombs stayed near zero. Nothing was broken.
+
+### The frozen result went the wrong way
+
+Two checkpoints shortlisted from the curve and confirmed properly, 400 rounds
+against the coin collector and 300 against the peaceful agent, against the r3750
+baseline measured the same way:
+
+| model | suicide vs cc | margin vs cc | coins vs cc | suicide vs pf | kill-in-round vs pf |
+|---|---|---|---|---|---|
+| **r3750** | 13.25% [10.3, 16.9] | **+0.17** +/- 0.47 | **4.80** | 3.50% | **69.2%** |
+| task-3 r2500 | **9.25%** [6.8, 12.5] | -0.23 +/- 0.38 | 4.12 | 2.33% | 56.3% [50.7, 61.8] |
+| task-3 r3250 | 11.75% [9.0, 15.3] | -0.29 +/- 0.42 | 4.10 | 3.00% | 47.7% [42.1, 53.3] |
+
+Survival improved, and that part is real: 13.25% to 9.25%. Everything the gates
+actually measure got worse. The kill rate against the peaceful agent fell from
+69.2% to 56.3%, and those intervals do not overlap, so that is a regression and
+not noise.
+
+**The agent traded productivity for caution.** It is exactly what you would
+build if you were told deaths are expensive and told almost nothing else.
+
+### The arithmetic that explains it, which I should have done first
+
+Across the whole run:
+
+| | count |
+|---|---|
+| kills scored | **81** |
+| rounds ending early, essentially always our death | **3736 of 4000** |
+| reward from kills, as a share of total reward | **0.31% to 0.52%**, every block |
+
+One kill per 49 rounds. 46 deaths for every kill. `KILLED_OPPONENT` is +5.0 and
+`GOT_KILLED` and `KILLED_SELF` are -5.0 each, so the net opponent-related signal
+the agent experienced was overwhelmingly "stay away from that thing". It learned
+precisely that, and the measurement above is what learning it looks like.
+
+This also closes the loop on this morning's blinding control, which found that
+zeroing channel 3 changes nothing. Of course it does. In 600,000 training steps
+the channel was attached to 81 positive events.
+
+Rounds ending early is not incidental either: with `--train 1` the framework
+stops the round when the training agent dies, so a policy that dies at step 144
+of 400 sees only the first third of every board. 47.6 crates destroyed out of
+119 on `classic` confirms these are deaths, not cleared boards.
+
+### What I got wrong
+
+I chose `coin_collector_agent` as the training partner and argued it was the
+harder, more transferable opponent. That reasoning was about board difficulty and
+ignored signal density, which is the thing that actually decides whether a
+behaviour can be learned. Against `peaceful_agent` the same frozen agent kills in
+69% of rounds, roughly 35 times denser, because the peaceful agent random-walks
+into blasts we are setting off anyway. If the kill behaviour is to be trained in
+at all, it has to be trained where kills happen.
+
+The pricing habit that has worked all project is to do the arithmetic before
+spending the run. Here I priced the reward *table* (it already had
+`KILLED_OPPONENT`) and never priced the reward *stream*. Those are different
+questions and only the second one predicts what gets learned.
+
+### The open question this leaves
+
+Tasks 1 to 3 and their thresholds are our own curriculum. The spec requires
+task 4: mean score over 200 rounds strictly above `rule_based_agent`, which it
+calls the entry ticket for the tournament. That has not been started, and there
+are 6 days.
+
+Three options, and this is a decision, not a finding:
+
+1. **Train against `peaceful_agent`** to get the hunting half of gate 3. Same
+   command, one word changed. Highest chance of moving a task-3 number, lowest
+   value toward the spec.
+2. **Go to task 4 now**, against `rule_based_agent`. It is the requirement, it
+   is a much denser and more informative opponent than either task-3 agent, and
+   whatever it teaches also applies to task 3.
+3. **Ship r3750 and spend the remaining days on the report.** The submission dry
+   run already passes and the DQN arm is the comparison, not the tournament
+   entry. Two clean negative results (augmentation untested, opponent training
+   backfired with the arithmetic to explain why) are worth more in a report than
+   a rushed fourth run.
+
+## 2026-09-10 - Task 3 measured, and a bug that measured nothing at all
+
+### The bug first, because it invalidated the first hour of the session
+
+**Symptom.** `DQN_MODEL_FILE=models/task2-classic-r3750-ego13.pt python
+tools/evaluate.py --agents dqn_agent --scenario classic --n-rounds 30` reported
+**0.00 coins, 400.0 steps, 0 bombs**. The identical command with the identical
+file given as an *absolute* path reported **7.72 coins**.
+
+**Cause.** `agents.py`, `SequentialAgentBackend.send_event`, wraps *every*
+agent callback in an `os.chdir` into `agent_code/<agent>/`. So while our code
+runs, including the import of `callbacks.py` where `MODEL_FILE` is built, the
+working directory is the agent's own folder, not the repo root.
+`models/task2-classic-r3750-ego13.pt` therefore resolved to
+`agent_code/dqn_agent/models/task2-classic-r3750-ego13.pt`, which does not
+exist, `will_load` came out False, and `setup` handed the game a randomly
+initialised network. There is a warning for exactly this case and it is useless:
+it goes to the agent's own log file, which was never even created in that run.
+
+The chdir behaviour was already known and written down (2026-08-31, and it is
+the reason every path in `callbacks.py` is built from `Path(__file__)`). The one
+path that came from an environment variable instead was the one that broke. Any
+future switch that names a file needs the same treatment.
+
+**Evidence it was untrained weights and not a policy.**
+
+- The greedy policy shuttles RIGHT, LEFT, RIGHT, LEFT out of the starting corner
+  and never leaves, for all 400 steps of all 30 rounds.
+- Q values read off the checkpoint by hand say DOWN (9.109) at that tile. The
+  agent in the game did not go down. The network in the game was not that
+  network.
+- With `DQN_PLAY_EPSILON=0.05` on top, the same agent kills itself in **100%**
+  of rounds, mean round length 11 steps.
+
+**Fix** (`callbacks.py`, the file that ships): a relative `DQN_MODEL_FILE` is
+resolved against the repo root, and a path that does not resolve to an existing
+file raises `FileNotFoundError` instead of falling through to random weights.
+Verified three ways: the relative path now measures 8.17 coins, a nonexistent
+path now crashes the run instead of reporting 0.00, and with no variable set the
+agent still loads its own `dqn-model.pt` exactly as before. Official games never
+set the variable, so the raise cannot fire in the tournament.
+
+**Sixth time.** Sixth measurement artefact that looked like a modelling result.
+The pattern is identical every time: a number that is quietly wrong is worse
+than a run that crashes.
+
+**What it cost.** The opponent-perception test below was run first against the
+broken agent and "failed", and it produced a confident and completely wrong
+conclusion: that the 13x13 crop never sees an opponent, so task 3 needed a
+wider view or a hand-crafted compass feature. Both agents were sitting in their
+corners because ours was not playing. Measured properly the opposite is true.
+Recording this because that wrong conclusion would have cost a retrain.
+
+### Channel 3 works, and the ego crop is not the problem
+
+`tools/test_others.py`, 41 checks, all passing. Channel 3 has been all-zero for
+the whole project because tasks 1 and 2 have no opponents, so it was worth
+testing before anything was built on it.
+
+- Channel 3 lights exactly one tile per opponent, at the right coordinates, in
+  the global view and under the `ego:13` crop, in all four directions.
+- The crop's blind spot is real but bounded: an opponent 6 tiles away is
+  visible, 7 tiles away is not.
+- `steps_until_lethal` already reads every bomb on the board. An opponent's bomb
+  produces exactly the same danger map as our own; ownership does not enter it.
+- `legal_actions` already blocks a tile an opponent is standing on, and only
+  that tile. `escape_exists` treats two opponents sealing a corner as no escape.
+- The 8-fold augmentation moves opponents with the board, all eight elements.
+
+Live, against `peaceful_agent` on `classic`, with the weights actually loaded:
+the opponent is inside the 13x13 window on **37%** of steps, and over 30 rounds
+**28 of 30** bring the two agents within 6 tiles of each other, median closest
+approach 2 tiles. Against `coin_collector_agent` it is 48% of steps and 30 of
+30. So the agent can see what it needs to see, and no view change is justified.
+
+### The task-3 baseline: same weights, three boards
+
+`tools/evaluate3.py`, 200 rounds each, training off, `models/task2-classic-r3750-ego13.pt`.
+
+| | our score | their score | margin | kills in >=1 round | our suicide |
+|---|---|---|---|---|---|
+| solo `classic` (1000 rounds, 09.09) | 7.51 coins | | | | **0.60%** |
+| vs `peaceful_agent` | 11.40 | 0.15 | **+11.24** +/- 0.52 | **74.5%** [68.0, 80.0] | **6.00%** |
+| vs `coin_collector_agent` | 4.40 | 4.94 | **-0.54** +/- 0.66 | 8.0% | **21.50%** |
+
+Neither gate passes. The kill rate against the peaceful agent is 5.5 points
+short of 80, and the score margin against the coin collector is a statistical
+tie that leans the wrong way.
+
+Two things in that table matter more than the gates themselves.
+
+**The suicide rate scales with the number of agents on the board: 0.60%, 6.0%,
+21.5%.** The agent learned bomb safety on an empty board and it does not
+transfer. Against the coin collector it kills itself in more than one round in
+five, which is ten times the task-2 gate it already passed.
+
+**Coin collection halves against a real opponent**, 7.51 to 4.00, which is
+roughly what you would expect from splitting 9 coins with someone who is good at
+collecting them, plus the rounds we end early by dying.
+
+### The arithmetic that says what to do next
+
+Splitting the 200 `coin_collector` rounds by whether we killed ourselves:
+
+| | rounds | our score | their score | margin | killed them | mean death step |
+|---|---|---|---|---|---|---|
+| we survived | 157 | 5.10 +/- 0.43 | 4.26 +/- 0.31 | **+0.83** | 13.4% | |
+| we suicided | 43 | 2.51 +/- 0.58 | 6.60 +/- 0.58 | **-4.09** | 0.0% | 122 |
+
+**The whole margin deficit is the suicides.** In the rounds we survive we are
+already ahead by +0.83. Suicide costs about 4.9 score in the round it happens,
+in both directions at once: we stop collecting at step 122 of 400, and the
+opponent gets the rest of the board to itself.
+
+So the first task-3 lever is not a KILLED_OPPONENT reward. It is bomb safety
+with another body on the board. It is worth about 1.4 score against the coin
+collector on its own, which is more than the gate needs, and until it is fixed a
+hunting reward cannot be measured through a 21.5% suicide rate anyway.
+
+The same split against the peaceful agent says the opposite, which is why the
+two halves of this gate need different work: 6 suicides in 200 rounds, and we
+kill in 69.6% of the rounds we survive. Removing every suicide there moves the
+gate number by about a point. That half is genuinely a hunting problem.
+
+### Priced on paper before writing anything
+
+Rather than guess at a fix, every bomb the agent drops in 120 real rounds was
+replayed through four candidate survivability checks, then split by whether that
+bomb is the one that killed us. `recall` is the share of *fatal* bombs a
+candidate would have blocked, `cost` the share of *survived* bombs it would also
+have blocked. Blocking bombs is not free; the agent needs them for crates.
+
+vs `coin_collector_agent`, 17 fatal bombs and 5438 survived bombs:
+
+| candidate | blocks fatal | blocks survived |
+|---|---|---|
+| the live check (opponents are walls) | 0 of 17, 0% | 0.00% |
+| opponents may **move** | 4 of 17, **23.5%** | **0.39%** |
+| opponents may **bomb** where they stand | 0 of 17, 0% | 0.06% |
+| both | 4 of 17, 23.5% | 0.39% |
+
+Two conclusions, ten minutes, no training run. "Opponents may move" is worth
+having and nearly free. "Opponents may drop a bomb" is worth nothing and was
+dropped. And, the uncomfortable one: **76% of the self-kills are not explained
+by the opponent at all.** An escape existed at drop time by every check we can
+write, and the agent walked into its own blast anyway.
+
+### A hypothesis, tested and wrong
+
+The obvious explanation for that 76%: channel 3 was identically zero for every
+gradient step this network ever took, so the weights reading it have never seen
+a nonzero input, and lighting it up injects an untrained perturbation.
+
+Control: play the same games with channel 3 forced back to zero, so the game is
+identical and only what the network is shown differs. 200 rounds each.
+
+| | suicide | margin | kill-in-round |
+|---|---|---|---|
+| vs `coin_collector`, sees opponents | 21.00% | -0.91 | 6.0% |
+| vs `coin_collector`, channel 3 zeroed | 22.50% | -0.71 | 10.0% |
+| vs `peaceful`, sees opponents | 3.00% | +11.04 | 71.5% |
+| vs `peaceful`, channel 3 zeroed | 2.50% | +10.54 | 64.5% |
+
+**No difference anywhere.** Blinding the agent to opponents entirely changes
+nothing measurable, which kills the untrained-channel story and also says
+something blunter: the current policy is not using channel 3 at all. It is not
+that it uses it badly. It plays exactly the same game with the channel on or
+off. Any task-3 behaviour has to be trained in; there is nothing to tune.
+
+### The mask, written and measured
+
+`opponent_reach()` is a free-space breadth-first walk outward from every
+opponent at once, giving the fewest moves an opponent needs to stand on each
+tile. `steps_to_safety` and `escape_exists` take an `opponents_move` flag that
+skips a candidate tile when `reach[tile] <= d + 1`.
+
+Off by default in the function signature, and `DQN_OPPONENT_MASK` defaults to on
+at play time and off in training. That is deliberate: `train.py` labels
+SUICIDAL_BOMB with the same `escape_exists`, and changing that would move the
+training signal and the `suicidal_bombs` column underneath every comparison we
+have. Same reasoning as the suicide mask.
+
+400 frozen rounds per arm, one variable, in the STATUS table above. Against the
+coin collector, self-kills 20.25% -> **13.25%** and margin -0.38 -> **+0.17**,
+for 0.17 ms per step and no loss of coins or crates. Against the peaceful agent,
+nothing, which is exactly what the pricing predicted.
+
+Note the mask beat its own forecast: drop-time recall was 23.5% of fatal bombs,
+which predicted about 5 points of suicide rate, and it delivered 7. Blocking a
+bad bomb also avoids the trouble that follows it.
+
+12 new checks in `tools/test_others.py` cover it, including that
+`opponent_reach` is 0 on the opponent and unreachable through stone, that a side
+pocket the opponents cannot reach first still counts as an escape (the first
+version of that test was wrong, not the code), and that with no opponents on the
+board the two checks cannot disagree.
+
+### Setting up the first task-3 training run
+
+The reward function needed nothing. `KILLED_OPPONENT` is already 5.0,
+`GOT_KILLED` -5.0, and `GOOD_BOMB` already counts opponents caught in the blast
+alongside crates. So the first run can be a clean single-variable experiment:
+the same settings that produced r3750, plus an opponent in the game. No new
+reward, no new event, no new feature. If that alone does not move the numbers we
+will know it is the reward and not the exposure.
+
+What did need building is `tools/train_curve.py`, which could only train and
+measure solo. It now takes `--opponents`, which puts them in the training game
+and in every per-checkpoint evaluation, and writes the task-3 columns.
+
+**A bug caught before it cost an hour.** The first version evaluated every
+checkpoint in the training script's own process. `callbacks.MODEL_FILE` is a
+module-level constant built at first import, and the agent module is cached in
+`sys.modules` afterwards, so all sixteen checkpoints would have been measured
+with the weights of the first one and the curve would have come out flat. That
+is the same failure as the relative-path bug at the top of this entry, one level
+up. Fixed by shelling out to `tools/evaluate3.py --json`, one interpreter per
+checkpoint, and verified: a deliberately untrained checkpoint dropped in among
+real ones reports 0.00 coins and a -13.40 margin instead of copying its
+neighbour.
+
+Cost, measured rather than guessed: 0.75 s per training round in the cloud
+container with an opponent on the board, so 4000 rounds is about 50 minutes
+there and should be roughly 20 to 25 on the M3 Max, plus about 10 minutes to
+evaluate 16 checkpoints at 40 rounds each.
+
+**Before the run:** `dqn-model.pt` still holds the `crate-light` r6000 weights,
+and `--resume` reads exactly that file. Copy r3750 in first or the run resumes
+from the wrong policy.
+
+```
+cp models/task2-classic-r3750-ego13.pt agent_code/dqn_agent/dqn-model.pt
+
+DQN_VIEW="ego:13" DQN_EPS_START=0.3 DQN_EPS_DECAY=2000 \
+  python tools/train_curve.py --rounds 4000 --checkpoint-every 250 \
+  --eval-rounds 40 --scenario classic --opponents coin_collector_agent --resume
+```
+
+`coin_collector_agent` rather than `peaceful_agent` on purpose: it is the harder
+opponent, it is the gate that a policy change can actually move, and bomb safety
+learned with a real body competing for the same coins should transfer down to
+the peaceful matchup. Training against a random walker teaches very little.
+
+Baselines this run has to beat, all frozen, mask on:
+
+| | value |
+|---|---|
+| vs `coin_collector`: suicide | 13.25% |
+| vs `coin_collector`: score margin | +0.17 +/- 0.47 |
+| vs `peaceful`: kill-in-round | 69.2% |
+| solo `classic`: coins (must not collapse) | 7.51 |
+
+That last row matters. Nothing in this run protects task 2, so the winning
+checkpoint has to be re-measured solo as well before it can ship.
+
+### Reproducibility: the peaceful matchup is not seedable
+
+`peaceful_agent` calls `np.random.seed()` with no argument in its own `setup`,
+which reseeds numpy from OS entropy and overrides the world's `--seed`. Two
+200-round runs of the same frozen weights gave **74.5%** and **68.5%**
+kill-in-round. Both sit inside each other's confidence interval, so this is not
+a bug, but it does mean the 80% line cannot be called at n=200. Re-measure at
+1000 rounds before claiming that half of the gate either way.
+
+### New tooling
+
+`tools/evaluate3.py`. The framework's `round_statistics` sums `coins`, `kills`
+and `suicides` **over all agents**, which was fine solo and is useless now:
+`coin_collector_agent` does drop bombs, so an aggregated kill count cannot say
+who killed whom. `evaluate3.py` drives `BombeRLeWorld` directly and reads each
+agent's `statistics` dict at the end of every round, before `start_round`
+clears it. Same world class, same `do_step`, same stopping rules as `main.py`;
+only the bookkeeping is different. It reports a per-round score margin with a
+confidence interval, kill-in-round as a Wilson interval, and `--gate 3`.
+
+### What is still unknown
+
+- **Both gates now need training, and there are 7 days.** The coin-collector
+  margin is +0.17 +/- 0.47, a tie; the peaceful kill rate is 69.2% against 80%.
+  Neither closes without a policy that behaves differently when an opponent is
+  on the board, and the blinding control says the current one does not.
+- Whether the peaceful kill rate is limited by hunting or by opportunity. 69%
+  of rounds already contain a kill with **zero** kill-directed behaviour, so
+  most of those kills are the peaceful agent random-walking into a crate blast.
+  Worth knowing before paying for a reward that chases something already
+  happening by accident.
+- What the remaining 13.25% of self-kills are. They are not the opponent
+  standing in the way (the mask handles that now) and not the opponent's bombs
+  (priced at zero). Most likely the escape is real at drop time and the policy
+  fails to walk it, which is a training problem, not a masking one.
+- The augmentation ablation is dropped for now. It buys sample efficiency for a
+  task-2 gate we already decided to advance past, and task 3 has two gates that
+  need the remaining days.
+
 
 ## 2026-09-09 (night, 7) — Daniela's symmetry suggestion, implemented
 

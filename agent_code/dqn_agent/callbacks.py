@@ -17,7 +17,25 @@ from .model import ACTIONS, N_CHANNELS, QNetwork, action_mask, masked_argmax
 
 # DQN_MODEL_FILE lets the evaluation pass point at one specific checkpoint
 # without disturbing the live training file.
-MODEL_FILE = Path(os.environ.get("DQN_MODEL_FILE") or (Path(__file__).parent / "dqn-model.pt"))
+#
+# It is resolved against the repo root, not the working directory, and a path
+# that does not exist is a hard error. Both of those are scars: the agent does
+# not necessarily run with the shell's working directory, so a *relative*
+# DQN_MODEL_FILE resolved to nothing, `will_load` came out False, and the game
+# ran on a randomly initialised network. The one warning that said so went to
+# an agent log nobody was reading, and the run reported 0.00 coins as if that
+# were a result. Never set in an official game, so the raise cannot fire there.
+_MODEL_ENV = os.environ.get("DQN_MODEL_FILE")
+if _MODEL_ENV:
+    MODEL_FILE = Path(_MODEL_ENV)
+    if not MODEL_FILE.is_absolute():
+        MODEL_FILE = Path(__file__).resolve().parents[2] / MODEL_FILE
+    if not MODEL_FILE.is_file():
+        raise FileNotFoundError(
+            f"DQN_MODEL_FILE={_MODEL_ENV!r} resolved to {MODEL_FILE}, which does "
+            "not exist. Refusing to measure an untrained network.")
+else:
+    MODEL_FILE = Path(__file__).parent / "dqn-model.pt"
 
 # "global" feeds the whole board with the agent as one lit pixel, so the network
 # has to learn "walk toward a coin" separately for every position on the map.
