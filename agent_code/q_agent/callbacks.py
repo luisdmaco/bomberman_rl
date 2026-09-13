@@ -12,6 +12,9 @@ FEATURE_NAMES = [
     'crate_dir_up', 'crate_dir_down', 'crate_dir_left', 'crate_dir_right', 'crate_dir_none',
     'safe_dir_up', 'safe_dir_down', 'safe_dir_left', 'safe_dir_right', 'safe_dir_none',
     'crates_in_blast',
+    'opp_dir_up', 'opp_dir_down', 'opp_dir_left', 'opp_dir_right', 'opp_dir_none',
+    'opp_dist',
+    'opp_in_blast',
 ]
 N_FEATURES = len(FEATURE_NAMES)
 
@@ -19,6 +22,14 @@ def setup(self):
     self.model = LinearQModel(n_features=N_FEATURES, actions=ACTIONS)
     if not self.train:
         self.model.load("model.npy")
+        # a checkpoint from an older feature set would otherwise die inside
+        # the first dot product
+        saved = len(next(iter(self.model.weights.values())))
+        if saved != N_FEATURES:
+            raise ValueError(
+                f"model.npy holds {saved} weights per action but the feature "
+                f"vector has {N_FEATURES} entries. This checkpoint predates the "
+                f"current features.py -- retrain or restore a matching model.")
 
 def act(self, game_state):
     features = state_to_features(game_state)

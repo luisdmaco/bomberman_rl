@@ -30,21 +30,32 @@ def get_action_mask(game_state):
         elif danger_at(pos, dmap) == 0:
             mask[action] = False
 
+    # dont step onto tile we cannot escape from, but only while another
+    # move survives -- masking the last one hands us to the WAIT fallback
+    if bombs:
+        movable = [a for a in directions if mask[a]]
+        if len(movable) > 1:
+            doomed = [a for a in movable
+                      if not escape_exists(directions[a], field, bombs, others,
+                                           explosion_map, assume_own_bomb=False)]
+            if len(doomed) < len(movable):
+                for action in doomed:
+                    mask[action] = False
+
     # Never wait inside a blast zone or when is playing solo
     if danger_at((x,y), dmap) is not None or len(others) == 0:
         mask['WAIT'] = False
 
-    # Bomb
+    # Bomb: ask what the blast catches
+    blast = get_blast_coords(x, y, field)
+    hits_crate = any(field[bx, by] == 1 for (bx, by) in blast)
+    hits_opponent = any(o[3] in blast for o in others)
+
     if not can_bomb:
         mask['BOMB'] = False
-    elif np.sum(field == 1) == 0 and len(others) == 0:
+    elif not hits_crate and not hits_opponent:
         mask['BOMB'] = False    # nothing to gain, only risk
-
-    elif len(others) == 0 and not any(field[bx, by] == 1
-                                      for (bx, by) in get_blast_coords(x, y, field)):
-        mask['BOMB'] = False   # never spend a bomb on zero crates 
-    
-    elif not escape_exists((x, y), field, bombs, others):
+    elif not escape_exists((x, y), field, bombs, others, explosion_map):
         mask['BOMB'] = False
 
     # Never hand back zero legal actions
@@ -53,26 +64,65 @@ def get_action_mask(game_state):
 
     return mask 
 
-# TODO: only accounts for one bomb at a time
-# change later for multi-bomb scenario
-def escape_exists(pos, field, bombs, others, bomb_power=3, bomb_timer=4):
+# Would dropping a bomb here still leave us a way out?
+# Timing from environment.do_step: bomb with timer t is lethal at step t AND
+# t+1 (the explosion goes one more step), our own bomb at steps 4 and 5,
+# explosion_map entry at step 0 only
+# assume_own_bomb=False asks the same about tile we want to step onto
+def escape_exists(pos, field, bombs, others, explosion_map=None,
+                  bomb_power=3, bomb_timer=4, assume_own_bomb=True):
 
-    blast = get_blast_coords(pos[0], pos[1], field, bomb_power)
+    lethal = {}          # step -> tiles lethal at the end of that step
 
-    frontier = deque([(pos, 0)])
-    visited = {pos}
-    while frontier:
-        (cx, cy), dist = frontier.popleft()
-        if (cx, cy) not in blast:
-            return True
-        if dist == bomb_timer:
-            continue
-        for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
-            npos = (cx + dx, cy + dy)
-            if npos not in visited and get_walkable(field, npos[0], npos[1], bombs, others):
-                visited.add(npos)
-                frontier.append((npos, dist + 1))
-    return False
+    def mark(step, tiles):
+        lethal.setdefault(step, set()).update(tiles)
+
+    horizon = 1
+
+    # the bomb we are thinking about dropping
+    if assume_own_bomb:
+        own_blast = get_blast_coords(pos[0], pos[1], field, bomb_power)
+        mark(bomb_timer, own_blast)
+        mark(bomb_timer + 1, own_blast)
+        horizon = bomb_timer + 1
+
+    # every bomb already ticking, ours and theirs
+    for (bx, by), t in bombs:
+        blast = get_blast_coords(bx, by, field, bomb_power)
+        mark(t, blast)
+        mark(t + 1, blast)
+        horizon = max(horizon, t + 1)
+
+    # explosions burning right now
+    if explosion_map is not None:
+        xs, ys = np.nonzero(explosion_map)
+        mark(0, {(int(bx), int(by)) for bx, by in zip(xs, ys)})
+
+    if pos in lethal.get(0, ()):
+        return False     # we are already dead this step, wherever we go
+
+    # where can we stand alive after each step; waiting counts as a move,
+    # walking back onto our own bomb does not
+    frontier = {pos}
+    for step in range(1, horizon + 1):
+        deadly = lethal.get(step, ())
+        reachable = set()
+        for (cx, cy) in frontier:
+            for dx, dy in [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)]:
+                npos = (cx + dx, cy + dy)
+                if (dx, dy) != (0, 0):
+                    if assume_own_bomb and npos == pos:
+                        continue    # our own bomb occupies that tile now
+                    if not get_walkable(field, npos[0], npos[1], bombs, others):
+                        continue
+                if npos in deadly:
+                    continue
+                reachable.add(npos)
+        if not reachable:
+            return False
+        frontier = reachable
+
+    return True
 
 
 # 1. FEATURE
@@ -108,6 +158,8 @@ def get_walkable(field, x, y, bombs, others):
 # 2. FEATURE
 # Given a bomb at (bomb_x, bomb_y), return the set of tiles
 # that would be hit by its explosion, respecting walls.
+# only walls stop the blast, crates do not: they are destroyed and the
+# tiles behind them still explode
 def get_blast_coords(bomb_x, bomb_y, field, bomb_power=3):
     blast = {(bomb_x, bomb_y)}
 
@@ -116,13 +168,9 @@ def get_blast_coords(bomb_x, bomb_y, field, bomb_power=3):
             nx, ny = bomb_x + dx * i, bomb_y + dy * i
             if not (0 <= nx < field.shape[0] and 0 <= ny < field.shape[1]):
                 break
-            if field[nx, ny] == -1:  # wall stops the blast
+            if field[nx, ny] == -1:
                 break
             blast.add((nx, ny))
-            # note: crates absorb the blast visually/logically but the
-            # tile itself still becomes dangerous; blast stops AFTER a crate
-            if field[nx, ny] == 1:
-                break
     return blast
 
 # creates a danger map from the active explosions and ticking bombs
@@ -263,6 +311,46 @@ def safe_free_tiles(field, bombs, explosion_map):
     return [(xx, yy) for xx in range(1, w-1) for yy in range(1, h-1)
             if field[xx, yy] == 0 and (xx, yy) not in dmap]
 
+# 8. Feature: direction + distance to the nearest opponent
+# get_walkable reports an occupied tile as blocked
+def bfs_to_opponents(start, field, bombs, others):
+    opponents = {o[3] for o in others}
+    if not opponents:
+        return 'NONE', None
+
+    neighbors = {'UP': (0, -1), 'DOWN': (0, 1), 'LEFT': (-1, 0), 'RIGHT': (1, 0)}
+    queue = deque()
+    visited = {start}
+
+    for direction, (dx, dy) in neighbors.items():
+        npos = (start[0] + dx, start[1] + dy)
+        if npos in opponents:
+            return direction, 1
+        if get_walkable(field, npos[0], npos[1], bombs, others):
+            visited.add(npos)
+            queue.append((npos, direction, 1))
+
+    while queue:
+        pos, first_dir, dist = queue.popleft()
+        for direction, (dx, dy) in neighbors.items():
+            npos = (pos[0] + dx, pos[1] + dy)
+            if npos in visited:
+                continue
+            if npos in opponents:
+                return first_dir, dist + 1
+            if get_walkable(field, npos[0], npos[1], bombs, others):
+                visited.add(npos)
+                queue.append((npos, first_dir, dist + 1))
+
+    return 'NONE', None   # no opponent reachable
+
+# 9. Feature: does a bomb dropped at (x, y) catch anybody?
+def opponent_in_blast(x, y, field, others, bomb_power=3):
+    if not others:
+        return False
+    blast = get_blast_coords(x, y, field, bomb_power)
+    return any(o[3] in blast for o in others)
+
 
 def state_to_features(game_state):
 
@@ -331,8 +419,24 @@ def state_to_features(game_state):
                          for d in ['UP', 'DOWN', 'LEFT', 'RIGHT', 'NONE']]
 
     # 7. FEATURE: How many crates destroy a bomb dropped at (x,y)
+    # /12 = BOMB_POWER tiles in each of the 4 directions, the true maximum
     crates_in_blast = sum(1 for (bx, by) in get_blast_coords(x, y, field) if field[bx, by] == 1)
-    crate_blast_feature = [crates_in_blast / 4.0] 
+    crate_blast_feature = [crates_in_blast / 12.0] 
+
+    # 8. FEATURE: direction and distance to the nearest opponent
+    opp_dir, opp_dist = bfs_to_opponents((x, y), field, bombs, others)
+
+    opp_dir_features = [1.0 if opp_dir == d else 0.0
+                        for d in ['UP', 'DOWN', 'LEFT', 'RIGHT', 'NONE']]
+
+    # 0.0 = none reachable, 1.0 = adjacent. coin_dist maps none to 1.0 instead
+    if opp_dist is None:
+        opp_dist_feature = [0.0]
+    else:
+        opp_dist_feature = [1.0 / opp_dist]
+
+    # 9. FEATURE: would a bomb dropped here catch an opponent?
+    opp_blast_feature = [1.0 if opponent_in_blast(x, y, field, others) else 0.0]
 
     # --- combine into one fixed-length vector ---
     features = np.array(
@@ -343,7 +447,10 @@ def state_to_features(game_state):
         coin_dist_feature +   # 1
         crate_dir_features +  # 5
         safe_dir_features +   # 5
-        crate_blast_feature,  # 1
+        crate_blast_feature + # 1
+        opp_dir_features +    # 5
+        opp_dist_feature +    # 1
+        opp_blast_feature,    # 1
         dtype=np.float32
     )
 
