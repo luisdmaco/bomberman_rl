@@ -389,6 +389,25 @@ over the first half and the second half exploits.
 
 # Part 2 — Log
 
+## 2026-09-15 - Checkpoint curve now displays frozen score
+
+Updated `tools/train_curve.py` so every opponent-evaluation checkpoint line now
+shows the DQN's actual frozen mean score and 95% confidence interval before the
+existing coins, suicide, kill-in-round and margin metrics. The same values are
+appended to `eval_curve.csv` as `frozen_score` and `score_ci95`; all existing
+column names and their order are preserved for compatibility with prior curve
+readers. Solo checkpoint output is unchanged because, without opponents, score
+equals collected coins.
+
+This is evaluation display/bookkeeping only. No reward, model, action or
+training behaviour changed, and no training or long evaluation was started.
+Static syntax and schema checks passed. A disposable two-round frozen runtime
+check then returned both `score` and `score_ci` and rendered the new line format
+successfully. Its first two attempts were blocked only because the sandbox did
+not permit the framework's normal game/opponent log writes; granting those
+specific log paths allowed the same check to pass. The two rounds are a smoke
+test and are not reported as performance evidence.
+
 ## 2026-09-14 - Repository prepared for the 15.09 team comparison
 
 Fetched `origin` successfully. The latest remote Q-learning branch remains

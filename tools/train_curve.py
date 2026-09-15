@@ -103,7 +103,7 @@ def train(rounds, checkpoint_every, scenario, resume, env_extra, opponents=()):
 SOLO_COLUMNS = ["rounds_trained", "frozen_coins", "ci95", "mean_steps", "invalid_per_round"]
 VERSUS_COLUMNS = ["rounds_trained", "frozen_coins", "ci95", "mean_steps",
                   "invalid_per_round", "suicide_rate", "kill_in_round",
-                  "score_margin", "margin_ci95"]
+                  "score_margin", "margin_ci95", "frozen_score", "score_ci95"]
 
 
 def evaluate_checkpoint(path, rounds, scenario, env_extra):
@@ -145,6 +145,7 @@ def evaluate_checkpoint_versus(path, rounds, scenario, opponents, env_extra):
     opp_keys = [k for k in rows[0] if k not in (AGENT, "_steps")]
     mine = [r[AGENT] for r in rows]
     coins, ci = mean_ci([m["coins"] for m in mine])
+    score, score_ci = mean_ci([m["score"] for m in mine])
     steps = sum(r["_steps"] for r in rows) / max(1, n)
     invalid = sum(m["invalid"] for m in mine) / max(1, n)
     suicide = sum(m["suicides"] for m in mine) / max(1, n)
@@ -155,7 +156,8 @@ def evaluate_checkpoint_versus(path, rounds, scenario, opponents, env_extra):
     margin, margin_ci = mean_ci(
         [r[AGENT]["score"] - statistics.fmean([r[o]["score"] for o in opp_keys])
          for r in rows])
-    return dict(coins=coins, ci=ci, steps=steps, invalid=invalid,
+    return dict(coins=coins, ci=ci, score=score, score_ci=score_ci,
+                steps=steps, invalid=invalid,
                 suicide=suicide, killed=killed, margin=margin, margin_ci=margin_ci)
 
 
@@ -213,8 +215,10 @@ def main():
                                            eval_opponents, env_extra)
             row = [trained, round(m["coins"], 2), round(m["ci"], 2), round(m["steps"], 1),
                    round(m["invalid"], 2), round(m["suicide"], 4), round(m["killed"], 4),
-                   round(m["margin"], 2), round(m["margin_ci"], 2)]
-            print(f"{trained:>6} rounds | coins {m['coins']:5.2f} +/- {m['ci']:4.2f} "
+                   round(m["margin"], 2), round(m["margin_ci"], 2),
+                   round(m["score"], 2), round(m["score_ci"], 2)]
+            print(f"{trained:>6} rounds | score {m['score']:5.2f} +/- {m['score_ci']:4.2f} "
+                  f"| coins {m['coins']:5.2f} +/- {m['ci']:4.2f} "
                   f"| suicide {m['suicide']:6.2%} | kill-in-round {m['killed']:6.2%} "
                   f"| margin {m['margin']:+6.2f} +/- {m['margin_ci']:4.2f}", flush=True)
         else:
