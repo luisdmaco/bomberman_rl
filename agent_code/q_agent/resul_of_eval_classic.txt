@@ -1,0 +1,146 @@
+FIRST TRY:
+
+classic | 150 rounds | seed 42 | sorted by coins
+
+  #  model                    coins  crates  suicid   steps  bombs
+------------------------------------------------------------------
+  1  model_round4500.npy       5.47   79.58   0.000   400.0  37.42
+  2  model_round3000.npy       4.52   64.71   0.167   365.1  29.47
+  3  model_round2750.npy       3.97   57.33   0.027   393.9  26.34
+  4  model_round3250.npy       3.93   55.82   0.267   336.9  25.22
+  5  model_round4250.npy       3.87   54.80   0.080   385.4  25.54
+  6  model_round1750.npy       3.65   52.97   0.000   400.0  24.47
+  7  model_round4000.npy       3.18   46.39   0.200   354.4  22.04
+  8  model_round3750.npy       3.01   42.66   0.160   365.0  19.71
+  9  model_round2250.npy       2.71   39.43   0.027   392.8  17.72
+ 10  model_round2500.npy       2.27   30.92   0.007   397.7  14.31
+ 11  model_round500.npy        1.76   29.65   0.000   400.0  14.52
+ 12  model_round750.npy        1.66   27.92   0.000   400.0  12.44
+ 13  model_round1250.npy       1.65   27.97   0.000   400.0  12.95
+ 14  model_round3500.npy       1.62   23.48   0.053   386.4  10.90
+ 15  model.npy                 1.50   20.81   0.013   396.9  10.21
+ 16  model_round5000.npy       1.50   20.81   0.013   396.9  10.21
+ 17  model_round2000.npy       1.25   18.82   0.087   381.5   8.51
+ 18  model_round1500.npy       1.15   20.69   0.040   388.8   9.25
+ 19  model_round4750.npy       1.11   17.07   0.000   400.0   7.80
+ 20  model_round250.npy        0.79   17.72   0.000   400.0   7.72
+ 21  model_round1000.npy       0.64   13.01   0.000   400.0   5.75
+
+SECOND TRY:
+
+classic | 150 rounds | seed 42 | sorted by coins
+
+  #  model                    coins  crates  suicid   steps  bombs
+------------------------------------------------------------------
+  1  model.npy                 3.85   53.95   0.000   400.0  23.56
+  2  model_round6000.npy       3.85   53.95   0.000   400.0  23.56
+  3  model_round5000.npy       3.67   51.35   0.067   387.3  22.21
+  4  model_round5250.npy       2.31   32.73   0.000   400.0  14.23
+  5  model_round4250.npy       2.09   30.25   0.053   395.3  13.03
+  6  model_round750.npy        2.08   38.51   0.000   400.0  15.39
+  7  model_round500.npy        1.99   28.23   0.000   400.0  13.36
+  8  model_round3500.npy       1.87   26.82   0.207   346.5  11.55
+  9  model_round2250.npy       1.66   24.11   0.127   367.7  10.34
+ 10  model_round4500.npy       1.65   23.49   0.020   395.7  10.79
+ 11  model_round3750.npy       1.46   20.76   0.033   395.2   9.16
+ 12  model_round3000.npy       1.39   19.31   0.107   369.6   8.81
+ 13  model_round4000.npy       1.22   17.43   0.093   374.3   8.19
+ 14  model_round2000.npy       1.08   16.12   0.007   397.7   6.95
+ 15  model_round3250.npy       1.06   15.85   0.000   400.0   7.13
+ 16  model_round2500.npy       0.99   14.70   0.113   372.9   6.32
+ 17  model_round250.npy        0.97   22.27   0.000   400.0   7.97
+ 18  model_round1500.npy       0.93   16.28   0.053   385.8   6.92
+ 19  model_round5500.npy       0.84   11.30   0.000   400.0   4.87
+ 20  model_round2750.npy       0.77   11.23   0.053   385.1   5.18
+ 21  model_round4750.npy       0.76   12.69   0.033   395.4   5.71
+ 22  model_round5750.npy       0.69   11.81   0.007   398.7   5.38
+ 23  model_round1750.npy       0.49    7.37   0.020   395.4   3.43
+ 24  model_round1000.npy       0.48    6.54   0.000   400.0   2.81
+ 25  model_round1250.npy       0.27    4.30   0.013   396.2   1.89
+ 
+ LAST TRY:
+ classic | 150 rounds | seed 42 | sorted by coins
+
+  #  model                    coins  crates  suicid   steps  bombs
+------------------------------------------------------------------
+  1  model_round4500.npy       7.89  109.89   0.000   399.3  45.85
+  2  model_round4000.npy       7.79  109.01   0.000   399.9  44.86
+  3  model_round3750.npy       7.57  105.22   0.000   400.0  43.51
+  4  model_round2000.npy       7.49  105.57   0.000   399.9  45.51
+  5  model_round4750.npy       7.37  103.73   0.000   400.0  43.81
+  6  model_round5500.npy       7.09   99.55   0.000   400.0  43.20
+  7  model.npy                 7.07   99.09   0.000   400.0  41.21
+  8  model_round6000.npy       7.07   99.09   0.000   400.0  41.21
+  9  model_round5250.npy       6.69   94.95   0.007   399.1  41.79
+ 10  model_round2750.npy       6.34   88.56   0.053   386.8  36.41
+ 11  model_round2500.npy       6.29   88.76   0.000   399.9  37.37
+ 12  model_round5750.npy       5.97   82.80   0.000   400.0  33.93
+ 13  model_round5000.npy       5.75   79.10   0.067   382.8  34.62
+ 14  model_round3250.npy       5.43   76.23   0.000   400.0  32.50
+ 15  model_round3500.npy       5.31   73.60   0.047   386.6  31.81
+ 16  model_round1750.npy       5.04   74.53   0.000   400.0  33.29
+ 17  model_round500.npy        4.37   60.11   0.000   400.0  26.47
+ 18  model_round750.npy        4.27   58.74   0.000   400.0  26.17
+ 19  model_round1250.npy       3.99   56.26   0.000   400.0  25.21
+ 20  model_round2250.npy       3.65   59.62   0.000   399.9  25.07
+ 21  model_round4250.npy       3.06   42.35   0.020   394.3  17.70
+ 22  model_round1500.npy       2.03   29.71   0.000   400.0  11.81
+ 23  model_round3000.npy       2.01   33.72   0.000   400.0  13.46
+ 24  model_round1000.npy       1.68   25.66   0.000   400.0   9.88
+ 25  model_round250.npy        0.62   14.15   0.027   391.4   4.71
+
+TASK 3: 
+
+classic vs peaceful_agent+coin_collector_agent | 100 rounds | seed 42 | sorted by margin
+
+  #  model                 score  kills suicid  coins crates  margin
+--------------------------------------------------------------------
+  1  model_round2500.npy    7.31  0.560  0.270   4.51  58.06   +0.68
+  2  model_round3750.npy    6.73  0.430  0.160   4.58  52.79   +0.22
+  3  model_round4000.npy    6.41  0.490  0.170   3.96  51.85   -0.24
+  4  model_3_diana.npy      5.78  0.410  0.220   3.73  51.51   -1.30
+  5  model_round4500.npy    5.81  0.460  0.200   3.51  43.02   -1.51
+  6  model_round3000.npy    5.53  0.360  0.390   3.73  51.85   -1.82
+  7  model_round4250.npy    5.27  0.500  0.200   2.77  33.21   -2.17
+  8  model_round1500.npy    5.62  0.480  0.190   3.22  43.75   -2.18
+  9  model_round2250.npy    5.72  0.520  0.280   3.12  37.74   -2.44
+ 10  model_round4750.npy    5.27  0.390  0.160   3.32  41.47   -2.75
+ 11  model_round3500.npy    4.73  0.320  0.220   3.13  38.39   -3.00
+ 12  model_round1250.npy    4.45  0.390  0.190   2.50  29.33   -3.67
+ 13  model_round5000.npy    4.60  0.380  0.140   2.70  33.19   -3.72
+ 14  model.npy              4.37  0.370  0.240   2.52  33.04   -3.74
+ 15  model_round2750.npy    4.79  0.390  0.280   2.84  39.97   -3.95
+ 16  model_round3250.npy    4.15  0.330  0.250   2.50  32.20   -4.38
+ 17  model_round1750.npy    3.61  0.350  0.140   1.86  28.36   -4.97
+ 18  model_round500.npy     3.79  0.330  0.220   2.14  25.49   -5.12
+ 19  model_round250.npy     3.31  0.280  0.230   1.91  18.30   -5.40
+ 20  model_round750.npy     2.91  0.300  0.140   1.41  17.81   -6.69
+ 21  model_round2000.npy    3.14  0.240  0.140   1.94  23.69   -6.76
+ 22  model_round1000.npy    2.61  0.220  0.220   1.51  19.42   -6.96
+
+SECOND TRY: didnt do evaluation bc with the training was enough to check
+if the agent was stuck in a loop always in a movement, in this case WAIT
+
+first 250 {'kills': 0.596, 'trapped_opponent': 0.216, 'bombed_opponent': 3.868, 'reward': 49.02}
+last 250 {'kills': 0.448, 'trapped_opponent': 0.176, 'bombed_opponent': 2.58, 'reward': 34.519}
+
+LAST TRY AND SUCCESSFUL:
+classic vs peaceful_agent+coin_collector_agent | 100 rounds | seed 42 | sorted by margin
+
+  #  model                 score  kills suicid  coins crates  margin
+--------------------------------------------------------------------
+  1  model_round1000.npy    9.78  0.830  0.290   5.63  63.61   +5.14
+  2  model_round1250.npy    8.73  0.700  0.260   5.23  58.32   +4.64
+  3  model_round2250.npy    8.92  0.730  0.260   5.27  66.05   +3.92
+  4  model_round2500.npy    8.99  0.770  0.310   5.14  62.56   +3.72
+  5  model_round1750.npy    7.36  0.630  0.220   4.21  46.51   +2.52
+  6  model.npy              7.54  0.650  0.260   4.29  52.34   +2.41
+  7  model_round500.npy     6.75  0.580  0.200   3.85  45.09   +2.08
+  8  model_round1500.npy    7.14  0.600  0.350   4.14  48.03   +1.78
+  9  model_round2000.npy    6.88  0.610  0.320   3.83  43.62   +1.77
+ 10  model_round3000.npy    7.01  0.570  0.280   4.16  49.22   +1.53
+ 11  model_round250.npy     6.80  0.580  0.240   3.90  44.45   +1.40
+ 12  model_round750.npy     6.30  0.620  0.260   3.20  35.93   +1.09
+ 13  model_round2750.npy    5.68  0.480  0.280   3.28  37.69   -0.24
+ 14  model_3_diana.npy      6.41  0.390  0.250   4.46  54.56   -0.40
+
