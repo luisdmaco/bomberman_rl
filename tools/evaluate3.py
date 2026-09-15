@@ -23,9 +23,12 @@ Always runs with training off.
 import argparse
 import json
 import math
+import random
 import statistics
 import sys
 from pathlib import Path
+
+import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
@@ -66,6 +69,13 @@ def wilson_lower(successes, n, z=1.96):
 
 
 def play(agent_names, scenario, n_rounds, seed):
+    # WorldArgs.seed controls arena generation and action ordering, but the
+    # supplied rule-based agents use the process-global RNGs. Seed those too so
+    # separate candidate evaluations begin from the same stochastic stream.
+    if seed is not None:
+        random.seed(seed)
+        np.random.seed(seed)
+
     args = WorldArgs(
         no_gui=True, fps=15, turn_based=False, update_interval=0.1,
         save_replay=False, replay=None, make_video=False,

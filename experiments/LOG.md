@@ -6,74 +6,90 @@ newest first.
 
 ---
 
-## STATUS (2026-09-12, gate 4 passed and task 2 recovered)
+## STATUS (2026-09-14, team comparison prepared; final agent choice open)
 
-**Two candidates now pass gate 4, and one of them also has the best solo number
-the project has produced.** 5 days to the code deadline. `dqn-model.pt` holds
-run C's final weights, which is not the chosen checkpoint, so nothing shippable
-is in place yet.
+**C r1000 remains the measured, submission-tested fallback in `models/`.
+`agent_code/dqn_agent/dqn-model.pt` currently contains score-profile r1500, not
+C.** Score-profile r1250 passes the required mean-score gate at N=1000 and is
+much safer, but it is not a dominant per-round winner; do not install it until
+the remaining gates and final trade-off are decided.
+Both finalists pass gate 4 over 1000 frozen rounds. C is effectively tied with
+A on tournament score and is substantially better on solo coins and both
+task-3 measures. A is safer, but that safety does not buy a higher score.
 
-Solo at 300 rounds, tournament shape (us + 3 `rule_based`) at 400 unless noted:
+That selection is an average-score result, not a claim that C usually wins an
+individual animated round. The user watched C and A on the same seed and both
+looked weak. That is consistent with the frozen matrix: C dies by suicide in
+32.5% of crowded rounds, A in 17.4%, and each gets a kill in only about 27%.
+Both are noisy policies, not robust round-by-round winners.
 
-| model | solo coins | task-4 margin | suicide (crowded) | invalid |
-|---|---|---|---|---|
-| r3750 all-rounder | 7.65 +/- 0.24 | -1.02 +/- 0.40 (200r) fail | 42.50% | 1.00 |
-| r3250 specialist | 4.95 +/- 0.31 | +0.78 +/- 0.25 (1000r) PASS | 33.20% | 2.35 |
-| **A r3750** (mixed opponents) | 6.49 +/- 0.24 | +0.58 +/- 0.34 PASS | **15.25%** | **0.74** |
-| A r2750 (mixed opponents) | 5.18 +/- 0.29 | +0.44 +/- 0.35 PASS | 13.25% | 0.71 |
-| **C r1000** (solo refresher) | **7.87** +/- 0.19 | +0.66 +/- 0.38 PASS | 31.75% | 2.15 |
+Final-candidate measurements. Solo and tournament shape (us + 3 `rule_based`)
+are 1000 rounds. Task 3 is 300 rounds against `peaceful` and 400 against
+`coin_collector`. All runs are frozen.
 
-Two different trades, not a ranking. C wins on score everywhere. A is far more
-disciplined: half the self-kills and a third of the invalid actions. C bought
-its score back by bombing more (46.2 solo bombs against A's 31.3), and more
-bombing in a crowded room is more ways to die.
+| model | solo coins | DQN tournament score | weakest task-4 margin | suicide (crowded) | invalid (crowded) |
+|---|---|---|---|---|---|
+| **C r1000, selected** | **7.70 +/- 0.11** | 3.79 +/- 0.19 | +0.54 +/- 0.28 PASS | 32.50% (95% upper 35.47%) | 2.25 +/- 0.12 |
+| A r3750 | 6.33 +/- 0.13 | **3.81 +/- 0.19** | **+0.63 +/- 0.27 PASS** | **17.40% (95% upper 19.87%)** | **0.75 +/- 0.06** |
+
+| model | kills `peaceful` in a round | margin vs `coin_collector` |
+|---|---|---|
+| **C r1000, selected** | **76.7% [95% 71.6%, 81.1%] FAIL** | **+0.13 +/- 0.40 FAIL** |
+| A r3750 | 59.3% [95% 53.9%, 64.7%] FAIL | -0.82 +/- 0.38 FAIL |
+
+C still bombs much more solo: 45.66 +/- 0.76 per round against A's
+31.16 +/- 0.49. That is the mechanism behind both its higher solo score and
+its worse crowded-room safety.
 
 ### Gate scoreboard
 
 | task | gate | status |
 |---|---|---|
 | 1, `coin-heaven` | 45 of 50 coins, 0 invalid | **PASSED** 06.09, 46.06 coins |
-| 2, `classic` survival | suicide < 2% | **PASSED** 09.09, 0.60% over 1000 rounds |
-| 2, `classic` coins | 8 of 9 | not passed, best now **7.87** (C r1000), was 7.51 |
-| 3, vs `peaceful` | kill in >= 80% of rounds | not passed, best 69.2% (r3750). Being re-measured for A and C |
-| 3, vs `coin_collector` | positive margin | not passed, best +0.17 +/- 0.47. Being re-measured |
-| **4, vs `rule_based`** | **mean score strictly above** | **PASSED** by three checkpoints |
+| 2, `classic` survival | suicide < 2% | **PASSED**, C 1.00% over 1000 rounds, 95% upper 1.83% |
+| 2, `classic` coins | 8 of 9 | not passed, C **7.70 +/- 0.11** over 1000 rounds |
+| 3, vs `peaceful` | kill in >= 80% of rounds | not passed, C **76.7% [95% 71.6%, 81.1%]** |
+| 3, vs `coin_collector` | positive margin | not passed, C +0.13 +/- 0.40; historical best +0.17 +/- 0.47 |
+| **4, vs `rule_based`** | **mean score strictly above** | **PASSED**, both finalists at 1000 rounds; every paired CI above zero |
 
 Tasks 1 to 3 and their thresholds are our own curriculum. Task 4 is the spec's.
 
-### NOT MEASURED YET. Start here.
+### START HERE
 
-These were queued and then stopped unfinished on 2026-09-12. Nothing below has
-a number; do not quote any of it. Everything needed to get them is in place:
-both candidates are archived under `models/` (see below) and
-`tools/evaluate3.py` takes `DQN_MODEL_FILE` as an absolute path.
+C remains the measured, submission-tested fallback in `models/`. Do not repeat the previous
+training recipe: its reward function pays far more for demolition than the
+tournament scoreboard does. An optional `DQN_REWARD_PROFILE=score` final-stage
+profile is now implemented and verified, while the historical `curriculum`
+profile remains the default. The 1500-round fine-tune and r1250 confirmation
+are complete. At N=1000 r1250 passes the required average-score gate with
+margins +0.53 to +0.56 and 7.8% suicide, but finishes strictly first in only
+25.9% of rounds. The latest remote Q agent (`c0f36d7`) is now available as an
+exact unstaged snapshot in this working tree, and a shared frozen comparison is
+ready. The next action is for the team to confirm that `model.npy` is the
+intended Q checkpoint, then run
+`tools/compare_team_agents.py --rounds 200 --seed 211`. More identical DQN
+training is not justified. Project-wide work also remains: choose the best
+overall tournament entry, make the repository public, commit and push the final
+artifacts, build a clean submission zip, test that exact zip in Docker, and
+write the report. See the 2026-09-13 entry below.
 
-```
-M=$PWD/models/task4-C-solo-refresh-r1000-ego13.pt   # or the A model
-# 1. gate 4 at 1000 rounds (rule 4: re-measure near a threshold)
-DQN_MODEL_FILE=$M python tools/evaluate3.py --agents dqn_agent \
-  rule_based_agent rule_based_agent rule_based_agent \
-  --scenario classic --n-rounds 1000 --seed 77
-# 2. the task-2 coin number at 1000 rounds (currently 7.87 +/- 0.19 at n=300)
-DQN_MODEL_FILE=$M python tools/evaluate3.py --agents dqn_agent \
-  --scenario classic --n-rounds 1000 --seed 55
-# 3. the two task-3 gates
-DQN_MODEL_FILE=$M python tools/evaluate3.py --agents dqn_agent peaceful_agent \
-  --scenario classic --n-rounds 300 --gate 3
-DQN_MODEL_FILE=$M python tools/evaluate3.py --agents dqn_agent coin_collector_agent \
-  --scenario classic --n-rounds 400 --gate 3
-```
-
-Run all four for **both** candidates. The task-3 numbers matter most: they
-regressed hard for the specialist (kill-in-round 69.2% -> 37.7%) and whether
-either run repaired that is completely unknown.
+For a visual smoke test, VS Code now has `Play selected DQN (GUI, 3 random)` and
+`Play selected DQN (GUI, 3 rule based)`. Both are one frozen round, use the
+project virtual environment, and explicitly clear every play-time `DQN_*`
+override so they load the installed checkpoint with tournament defaults.
+The 14.09 rule-based GUI run loaded the correct model and had no timing errors,
+but was stopped before the round wrapped up. It is a smoke test, not evidence
+for or against performance; the 1000-round frozen matrix remains authoritative.
+Two additional VS Code launchers compare C and A on the same seed-77 classic
+board against three rule-based opponents. They point at the archived files
+directly, so neither launcher changes the installed `dqn-model.pt`.
 
 ### The two candidate models, archived
 
 | file | what it is |
 |---|---|
-| `models/task4-C-solo-refresh-r1000-ego13.pt` | run C. Best solo coins (7.87), gate 4 +0.66, but 31.75% suicide and 2.15 invalid in crowded games |
-| `models/task4-A-mixed-r3750-ego13.pt` | run A. Solo coins 6.49, gate 4 +0.58, and much more disciplined: 15.25% suicide, 0.74 invalid |
+| `models/task4-C-solo-refresh-r1000-ego13.pt` | **selected**. Solo 7.70 +/- 0.11; gate 4 passes; task-3 leader; 32.50% crowded suicide (95% upper 35.47%) |
+| `models/task4-A-mixed-r3750-ego13.pt` | safer finalist. Solo 6.33 +/- 0.13; gate 4 passes; 17.40% crowded suicide (95% upper 19.87%) |
 | `models/task4-classic-r3250-ego13.pt` | the specialist both were built from. Gate 4 +0.78 at 1000 rounds, solo coins only 4.95 |
 | `models/task2-classic-r3750-ego13.pt` | the task-2 all-rounder. Solo coins 7.65, fails gate 4 at -1.02 |
 
@@ -98,12 +114,13 @@ the gate. I predicted it would swing back and lose the gate. It did neither.
 
 ### What is left, in order
 
-1. **Decide which candidate ships**, C r1000 or A r3750, and put it in
-   `dqn-model.pt`.
-2. **Re-run the submission test**: stock `settings.py`, no `DQN_*`, `train=False`,
-   3 random opponents. Last passed 09.09 with a different model.
-3. Archive the chosen checkpoint under `models/` with `git add -f`.
-4. The report.
+1. Verify the teammates' current feature-based Q-learning model and make the
+   team-wide tournament choice. C is only the selected DQN checkpoint.
+2. Commit and push this branch, force-adding the reported ignored model files,
+   and make the repository publicly accessible.
+3. Build a minimal `final-project-agent-code.zip` from the winning agent folder,
+   test that exact payload in Docker, and upload it for the 17.09 pre-run.
+4. Final agent deadline: 21.09 at 21:00. Report deadline: 28.09 at 21:00.
 
 ### Reference numbers
 
@@ -113,7 +130,7 @@ the gate. I predicted it would swing back and lose the gate. It did neither.
 | `rule_based_agent`, solo `classic` | 8.60 coins, 0.00% suicide |
 | `rule_based_agent`, tournament shape | 3.30 mean score, 6.9 invalid actions/round |
 | Random walk, `coin-heaven` | ~18 coins |
-| Submission dry run | PASSED 09.09, 0 crashes, 0.73 ms/step against 500 ms |
+| Submission dry run | **PASSED 12.09 with selected C**, stock settings, 0 crashes |
 | Augmentation ablation | implemented, tested, never run |
 
 ---
@@ -371,6 +388,371 @@ over the first half and the second half exploits.
 ---
 
 # Part 2 — Log
+
+## 2026-09-14 - Repository prepared for the 15.09 team comparison
+
+Fetched `origin` successfully. The latest remote Q-learning branch remains
+`origin/agent_code/q_agent` at `c0f36d7` (`add rewards + training log`); the
+local Q branch is six commits behind it. The current DQN branch has substantial
+unstaged work, so no checkout or merge was attempted.
+
+Exported only `agent_code/q_agent/` from remote commit `c0f36d7` into the
+working tree without staging. All six tracked files hash exactly to that commit.
+The tracked `model.npy` has six action weight vectors with 34 weights each,
+matching the current callbacks and feature count. A one-round frozen launch
+against three rule-based agents completed without a crash. That round is a
+smoke test only and is not a performance result.
+
+Copied confirmed score-profile r1250 byte-for-byte from the ignored checkpoint
+directory to stable archive `models/task4-score-r1250-ego13.pt`. Meeting tools
+point at the archive, not the working checkpoint. The live `dqn-model.pt`
+remains r1500 and was not changed. `/models` is ignored, so this new archive is
+also intentionally unstaged and will require `git add -f` if the team selects it.
+
+Added `tools/compare_team_agents.py`. It evaluates Q and confirmed DQN r1250
+separately, frozen, against three rule-based agents under one protocol. It
+removes ambient `DQN_*` variables, points directly at the archived r1250 file,
+never copies either live model, preserves raw per-round JSON, and writes a
+machine-readable summary. Reported metrics are mean score with 95% CI, mean and
+individual opponent margins, strict-first/tied-first/behind-top rates, suicide,
+kill-round, bombs, invalid actions, and the gate-4 decision.
+
+For fairer separate-process comparisons, `tools/evaluate3.py --seed` now seeds
+Python and NumPy agent RNGs as well as the world RNG already seeded by
+`WorldArgs`. Candidate actions can still make later trajectories diverge, but
+both evaluations begin from the same random streams.
+
+Added three VS Code launch configurations:
+
+- `Meeting: DQN r1250 (GUI, 3 rule based, seed 211)`;
+- `Meeting: Q agent (GUI, 3 rule based, seed 211)`;
+- `Meeting: compare DQN r1250 and Q (200 frozen rounds)`.
+
+Created `experiments/MEETING_2026-09-15.md` with the current evidence, exact
+comparison command, decisions required, deadlines, repository state and red
+flags. In particular, the Q README's stored task-2 result is N=150 and its
+task-3/4 narrative is stale relative to later commits, so the Q owner must
+confirm which checkpoint `model.npy` represents before the result is used.
+
+Verification: launch JSON parsed and all three configurations exist; both
+Python files parse; the Q snapshot and 34-feature model match the remote commit;
+the Q frozen smoke launch passed; and the combined comparison completed two
+disposable rounds for both agents. The first disposable comparison exposed a
+path-display error only after calculations finished; the error was fixed and a
+second run passed end to end. Both two-round runs wrote only to `/tmp` and are
+not evidence. No N=200 comparison, training run, merge, commit or staging was
+performed.
+
+## 2026-09-14 - r1250 confirmed: safer and passes the mean gate, not dominant
+
+The user completed the required N=1000 frozen confirmation on unseen world
+seed 107. Raw per-round data is
+`experiments/runs/2026-09-14-score-r1250-tournament-n1000.json`; it contains
+exactly 1000 rows and the expected three independently named rule-based
+opponents.
+
+| metric | score-profile r1250 |
+|---|---:|
+| DQN score | 3.437 +/- 0.158 |
+| coins | 2.507 +/- 0.087 |
+| kills | 0.186 +/- 0.025 |
+| suicide | 7.80% (78/1000) |
+| bombs | 44.199 +/- 0.872 |
+| invalid | 0.328 +/- 0.035 |
+| margin vs RB 0 | +0.560 +/- 0.233, CI [+0.327, +0.793] |
+| margin vs RB 1 | +0.534 +/- 0.235, CI [+0.299, +0.769] |
+| margin vs RB 2 | +0.559 +/- 0.229, CI [+0.330, +0.788] |
+
+**The assignment's mean-score gate passes.** Every paired 95% interval is
+strictly above zero. The safety improvement also holds at useful sample size:
+7.8% crowded suicide versus 17.4% for A and 32.5% for C, although those older
+models were measured on a different world seed.
+
+The user's visual concern is also correct. Using the 1000 saved per-round rows,
+r1250 finished strictly ahead of all three opponents in 259 rounds (25.9%),
+tied for top in 85 (8.5%), and was behind at least one opponent in 656 (65.6%).
+Across the 3000 individual DQN-vs-RB comparisons it was ahead 1483 times
+(49.43%), tied 346 (11.53%), and behind 1171 (39.03%). A positive average
+margin therefore does not mean it usually appears as the GUI's sole winner.
+
+Mechanistically, the score reward taught survival more strongly than restraint.
+Suicide dropped sharply, but bombing remained high at 44.2 per round and kills
+fell to 0.186 per round (a kill occurred in 179/1000 rounds). r1250 is a safer
+policy with a valid positive mean margin, not the consistently dominant policy
+the user hoped to see. Do not continue the identical recipe: r1500 already
+regressed in the 40-round curve, and more of the same has no measured upward
+trend.
+
+## 2026-09-14 - Score-aligned fine-tune completed; r1250 shortlisted
+
+The user ran the prepared training command from A r3750: 1500 continuous
+`classic` rounds against three `rule_based_agent`s, score reward profile,
+`DQN_LR=2e-4`, epsilon 0.10 -> 0.05 over 750 rounds, augmentation off, agent
+seed 91. Wall clock was 14.6 minutes. Six older checkpoints were moved safely
+to `checkpoints/archive-20260914-165646/` before the run.
+
+Frozen curve, 40 rounds per checkpoint:
+
+| rounds | coins | suicide | kill-in-round | mean margin |
+|---:|---:|---:|---:|---:|
+| 250 | 2.40 +/- 0.37 | 15.0% | 17.5% | -0.26 +/- 0.92 |
+| 500 | 2.20 +/- 0.35 | 10.0% | 10.0% | -0.43 +/- 0.78 |
+| 750 | 1.48 +/- 0.39 | 5.0% | 25.0% | -0.39 +/- 0.97 |
+| 1000 | 2.10 +/- 0.41 | 17.5% | 5.0% | -0.70 +/- 0.73 |
+| **1250** | **3.00 +/- 0.47** | **2.5%** | 12.5% | **+1.42 +/- 1.03** |
+| 1500 | 2.33 +/- 0.49 | 2.5% | 10.0% | +0.10 +/- 1.10 |
+
+r1250 is the only candidate. The entire 40-round interval is above zero, but
+the interval is wide and the r1500 regression shows that the result is not a
+stable upward curve. Per project rule, this is a shortlist only, not a reported
+performance claim; because it is a noisy near-threshold selection, confirm at
+N=1000 rather than N=200.
+
+Training health checks passed on the final 1500 rows of `training_log.csv`:
+epsilon began at 0.0999, reached 0.05 at round 750 and stayed there; buffer grew
+continuously to 50,000; mean loss fell by block from 0.1164 to 0.0489; there was
+no restart. Training score rose from 1.28 in rounds 1-250 to 2.14 in rounds
+1251-1500, but that online number is diagnostic only. With 26 crates and 12.7
+good bombs per round in the last block, reward still averaged -7.48, which is
+consistent with demolition bonuses being removed rather than the old profile
+paying at least +25 from those two counters alone.
+
+Operational state: `agent_code/dqn_agent/dqn-model.pt` is the newly trained
+r1500 working model (SHA-256
+`7151d1ad7f8aa779cca8029ccda8e72e0ad21fea9b41d1f72ce21eee204d0bb1`).
+The r1250 candidate is
+`agent_code/dqn_agent/checkpoints/dqn-r001250.pt` (SHA-256
+`a09e1c3e295ff7085ae211a09e084c328951b8793b8b7a727f8d7bb9f5ea82fa`).
+Measured fallback C remains unchanged in `models/` with SHA-256
+`23b506a90b2bdf8d725863bde9ec3f9bbf4b0dccee551b7509cd88a975ee3b11`.
+
+## 2026-09-14 - Both finalists look weak; score-aligned retrain prepared
+
+The user's same-board visual comparison showed both C and A losing. This does
+not invalidate the 1000-round mean-score measurements, but it exposes what that
+gate does not say: a positive average margin is not a high probability of
+winning any one round. The frozen matrix already shows unstable behaviour. C
+has 32.50% crowded suicide and kills in 26.3% of rounds; A has 17.40% crowded
+suicide and kills in 27.3%.
+
+The learning curves do not justify simply running the old setup longer. A's
+40-round margin jumps between negative and positive values through the whole
+run, with no stable upward trend; C's six points are similarly flat. The chosen
+checkpoints are local noisy peaks, not the end of a converging curve.
+
+The reward mismatch is large enough to explain the visible policy. In the
+tournament matrix C scores 3.79 actual points but destroys 48.10 crates per
+round. `CRATE_DESTROYED=+0.5` therefore contributes roughly +24 training reward
+on its own, before `GOOD_BOMB=+1` and `COIN_FOUND=+0.5`. The learner is paid much
+more to demolish the board than to win, and C drops 38.53 bombs per crowded
+round against roughly 18 from each rule-based opponent.
+
+Added one isolated training option: `DQN_REWARD_PROFILE=score`. Its positive
+task-progress event rewards are the real scoreboard events,
+`COIN_COLLECTED=+1` and `KILLED_OPPONENT=+5`; crate, coin-found and good-bomb
+bonuses become zero. Existing safety shaping remains, with
+`SUICIDAL_BOMB=-5` and both death events at -10. The default is still
+`curriculum`, so every historical result remains reproducible and the installed
+frozen model behaves exactly as before.
+
+Verification passed: the file parses; the legacy profile still gives +1.98 for
+one crate + one found coin + one good bomb including the step cost; the score
+profile gives -0.02 for the same events; a suicide's two death events give
+-20.02; profile selection works; and all augmentation checks still pass. The
+first sandboxed test attempt was blocked from writing Python bytecode and
+pygame could not initialise audio/video; rerunning without bytecode and with
+dummy SDL drivers passed. No training or evaluation run was started.
+
+## 2026-09-14 - Side-by-side C and A visual launchers
+
+Added `Compare C r1000 (GUI, 3 rule based, seed 77)` and
+`Compare A r3750 (GUI, 3 rule based, seed 77)` to VS Code Run and Debug. Both
+use the same `classic` world seed, three rule-based opponents, one frozen round,
+the project virtual environment, and tournament-default play settings. The only
+intentional environment difference is the absolute `DQN_MODEL_FILE`, pointing
+at the corresponding archived checkpoint. All other play-time `DQN_*`
+variables are removed. Launching either configuration does not copy or modify
+`agent_code/dqn_agent/dqn-model.pt`.
+
+This is for behavioural inspection only. One seeded GUI round is not a
+performance measurement and does not supersede the 1000-round frozen matrix.
+No game or training run was started while adding the configurations.
+
+## 2026-09-14 - The bad-looking GUI round loaded the right model
+
+Investigated the visual run against three `rule_based_agent`s before considering
+another training run. The installed `dqn-model.pt` still has SHA-256
+`23b506a90b2bdf8d725863bde9ec3f9bbf4b0dccee551b7509cd88a975ee3b11`,
+identical to `models/task4-C-solo-refresh-r1000-ego13.pt`. The agent log says
+`Loaded model from dqn-model.pt (view ego:13)`, and the game log shows no agent
+error or decision-time violation. The launch configuration has no `--train`
+flag and explicitly removes all play-time `DQN_*` overrides.
+
+The game log ends during the round, with no `WRAPPING UP ROUND` or `SHUT DOWN`,
+so the watched game was stopped before completion. It cannot be treated as a
+result, and a single completed game would still be only a visual smoke test.
+
+The apparent weakness is consistent with the measured policy rather than a load
+failure. C's 1000-round frozen DQN score is 3.79 +/- 0.19, and its weakest
+paired margin against the three rule-based opponents is only +0.54 +/- 0.28.
+Its crowded suicide rate is 32.50% with a 95% upper bound of 35.47%. It wins the
+required comparison in expectation, but it is volatile and can look plainly
+worse in an individual game.
+
+**Decision: do not retrain from one incomplete GUI run.** If the objective is a
+calmer, safer DQN rather than the best cross-task DQN, the already measured A
+r3750 checkpoint is the controlled alternative: DQN score 3.81 +/- 0.19,
+weakest rule-based margin +0.63 +/- 0.27, and crowded suicide 17.40% with a 95%
+upper bound of 19.87%. Switching checkpoints is cheaper and better evidenced
+than launching an unpriced run. Any new training proposal must first define the
+target metric and reward stream, change one thing, and then re-measure every
+gate frozen.
+
+## 2026-09-13 - One-click frozen play environments
+
+Added two VS Code Run and Debug configurations for visually inspecting the
+selected DQN: one against three `random_agent`s and one against three
+`rule_based_agent`s. Each opens the GUI for one round, uses `venv/bin/python`,
+does not pass `--train`, and removes all nine `DQN_*` variables read by
+`callbacks.py`. The existing headless submission-check configuration was
+hardened with the same interpreter and clean environment. No game or training
+run was started by this edit.
+
+## 2026-09-13 - Assignment audit: DQN done, whole project not submitted
+
+Read all 12 pages of `final_project.pdf` and checked the repository against the
+actual submission rules. This corrects an important ambiguity in the handoff:
+17.09 at 21:00 is the optional official pre-run/crash-test deadline; the final
+agent-code deadline is 21.09 at 21:00, and the report is due 28.09 at 21:00.
+
+### What is genuinely finished
+
+The DQN arm is finished. C r1000 is selected within that arm, installed,
+byte-identical to its archive, measured frozen across every outstanding gate,
+and passes the one-round stock-framework submission shape with `train=False`
+and three `random_agent`s. Its play-time code uses CPU, pins PyTorch to one
+thread, has no multiprocessing, loads its weights from its own directory, and
+does not depend on the training callbacks during official play. No further DQN
+training is justified unless the official pre-run exposes a compatibility bug.
+
+### What still blocks calling the whole project finished
+
+1. The assignment requires the best model across the team to be submitted.
+   The project handoff says the feature-based Q-learning model is the intended
+   tournament entry, but the `agent_code/q_agent` branch visible in this clone
+   contains only an early implementation and no tracked trained parameters.
+   That may be stale relative to the teammates' machines, so their current
+   checkpoint must be obtained, measured, and compared before packaging.
+2. The current DQN changes are not committed or pushed. The final C archive and
+   two other task-4 archives remain ignored, and the configured GitHub URL
+   returns 404 to an unauthenticated visitor, so the public-repository
+   requirement is not yet demonstrably met.
+3. No submission zip exists. The live `agent_code/dqn_agent` directory is about
+   109 MB because it includes checkpoints, logs, CSVs, and `__pycache__`; it
+   must not be zipped wholesale. The final zip should contain only the winning
+   agent directory, its runtime source, and its trained parameters, plus a
+   `requirements.txt` only if that agent needs a library absent from the
+   supplied Docker image.
+4. The native stock-settings crash check passed, but the exact clean submission
+   payload has not been run inside the supplied Docker image. Docker is
+   installed on this Mac, but this session could not access the daemon socket,
+   so that verification remains for the owner to run.
+5. The report still remains. For three team members the requested length is
+   about 12,000 words total and not much more. Required sections are
+   Introduction, Background, Project planning, Methods, Training, Experiments
+   and Results, and Conclusion. Every subsection needs a named responsible
+   author; the report must include the public repository URL, dependencies,
+   both learning approaches, systematic comparisons and negative results, and
+   must not be committed to the public repository or use the university logo.
+   AI-assisted drafts must be rewritten in the team's own style, with the main
+   work clearly attributable to the team. The planning section must also show
+   real collaboration across the two models rather than isolated model silos.
+
+The official upstream `master` revision checked on 12.09 is already contained
+in this repository's history. No missing framework update was found. The next
+project action is team-wide model reconciliation, not more DQN training.
+
+## 2026-09-12 - Submission check passes with the selected model
+
+Re-ran the official one-round crash/configuration shape with C installed:
+stock `settings.py`, no `DQN_*` variables, `train=False`, `classic`, and three
+`random_agent` opponents. To make the stock-file condition literal without
+touching the working tree, the check ran from a temporary archive whose
+`settings.py` was byte-identical to `origin/master`; the selected
+`dqn-model.pt` was byte-identical to the working copy and C archive.
+
+**PASS: exit code 0, round completed, no crashes, agent errors, or decision-time
+violations.** The agent loaded `dqn-model.pt` with checkpoint view `ego:13`.
+This is deliberately only a pass/fail submission check; one round is not a
+performance measurement.
+
+The sandbox has no accessible macOS audio/display device, so an initial harness
+launch aborted inside `pygame.init()` before `settings.py` or the agent was
+loaded. The successful run used SDL's dummy audio and video drivers. Those are
+framework display settings, not `DQN_*` agent settings, and the game remained
+headless. The temporary checkout was removed after verification.
+
+## 2026-09-12 - Final candidate matrix measured; C selected and installed
+
+All eight missing measurements completed frozen. The command ran each process
+with a clean environment and an absolute `DQN_MODEL_FILE`; `evaluate3.py`
+constructed every agent with `train=False`. Raw terminal output is in
+`experiments/runs/2026-09-12-candidate-final-evaluation.txt`.
+
+### Gate 4, 1000 rounds, us plus three `rule_based_agent`s
+
+| model | DQN score | margin vs RB 0 | margin vs RB 1 | margin vs RB 2 | suicide | invalid |
+|---|---|---|---|---|---|---|
+| **C r1000** | 3.79 +/- 0.19 | +0.63 +/- 0.26 | +0.62 +/- 0.26 | +0.54 +/- 0.28 | 32.50% (95% upper 35.47%) | 2.25 +/- 0.12 |
+| A r3750 | 3.81 +/- 0.19 | +0.77 +/- 0.26 | +0.63 +/- 0.27 | +0.68 +/- 0.26 | 17.40% (95% upper 19.87%) | 0.75 +/- 0.06 |
+
+Both pass: even the weakest paired 95% interval is wholly above zero. A's
+safety advantage is real, but the two DQN score intervals are effectively
+identical.
+
+### Task 2, solo `classic`, 1000 rounds
+
+| model | coins | suicide | invalid |
+|---|---|---|---|
+| **C r1000** | **7.70 +/- 0.11** | 1.00% (95% upper 1.83%) PASS | 0.00 +/- 0.00 |
+| A r3750 | 6.33 +/- 0.13 | 0.50% (95% upper 1.17%) PASS | 0.00 +/- 0.00 |
+
+Both pass survival and fail the 8-coin gate. C's whole coin interval is below
+8, so the preliminary 7.87 +/- 0.19 at 300 rounds was not a pass and did not
+hold as the final estimate.
+
+### Task 3
+
+| model | kills `peaceful` in a round (300r) | margin vs `coin_collector` (400r) |
+|---|---|---|
+| **C r1000** | **76.7% [95% 71.6%, 81.1%] FAIL** | **+0.13 +/- 0.40 FAIL** |
+| A r3750 | 59.3% [95% 53.9%, 64.7%] FAIL | -0.82 +/- 0.38 FAIL |
+
+Neither gate passes. C repaired most of the specialist's loss against
+`peaceful_agent` and is close in point estimate, but its 95% lower bound is well
+below 80%, so there is no pass to confirm. Against `coin_collector_agent`, C is
+indistinguishable from a tie and A is clearly behind.
+
+### Shipping decision
+
+**C r1000 ships.** Gate 4 is the specification's required gate and both models
+pass it with effectively tied DQN scores. C is then clearly better on solo coins
+and both task-3 measures. A's lower suicide and invalid-action rates do not turn
+into a score advantage. No further training is justified before the deadline.
+
+Copied `models/task4-C-solo-refresh-r1000-ego13.pt` to
+`agent_code/dqn_agent/dqn-model.pt` and verified the files byte-for-byte. Both
+have SHA-256
+`23b506a90b2bdf8d725863bde9ec3f9bbf4b0dccee551b7509cd88a975ee3b11`.
+The next action is the clean submission test.
+
+## 2026-09-12 - Evaluation preflight and housekeeping
+
+No model number was produced and no long evaluation was started. Both candidate
+paths resolve, `tools/evaluate3.py` still hard-codes training off, and the shell
+has no ambient `DQN_*` variables. The ignored `tools/.train_curve.py.bak`
+leftover was deleted. The next action remains the eight frozen measurements in
+the STATUS block, run on the M3 Max.
 
 ## 2026-09-12 - Two ways out of the specialist trap, and the cheap one won
 

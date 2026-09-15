@@ -80,6 +80,10 @@ CONFIG = {
     # experiments/runs/ stay the honest baseline. DQN_AUGMENT=1 to enable.
     "augment": _env("DQN_AUGMENT", 0, int),
     "seed": _env("DQN_SEED", -1, int),
+    # The curriculum profile preserves every experiment recorded so far. The
+    # score profile is for the final tournament stage: positive rewards match
+    # the points on the scoreboard instead of paying heavily for demolition.
+    "reward_profile": os.environ.get("DQN_REWARD_PROFILE", "curriculum"),
 }
 
 # Custom events. The spec is explicit that a dense reward signal beats a sparse
@@ -117,6 +121,28 @@ REWARDS = {
     STAYED_IN_DANGER: -0.4,
     ENTERED_DANGER: -0.6,
     CLOSER_TO_SAFETY: 0.15,
+}
+
+# Final-stage alternative. In a crowded frozen round C destroys about 48
+# crates, so the curriculum profile pays roughly +24 for crates alone against
+# only 3.79 points on the actual scoreboard. GOOD_BOMB and COIN_FOUND widen
+# that mismatch further. Keeping scoreboard events as the only positive
+# task-progress rewards makes a retrain answer the question we care about: does
+# the policy win? Safety shaping and invalid-action penalties remain because
+# dying or wasting a move destroys future opportunities to score.
+SCORE_REWARDS = {
+    **REWARDS,
+    e.CRATE_DESTROYED: 0.0,
+    e.COIN_FOUND: 0.0,
+    GOOD_BOMB: 0.0,
+    SUICIDAL_BOMB: -5.0,
+    e.KILLED_SELF: -10.0,
+    e.GOT_KILLED: -10.0,
+}
+
+REWARD_PROFILES = {
+    "curriculum": REWARDS,
+    "score": SCORE_REWARDS,
 }
 STEP_PENALTY = -0.02
 
@@ -188,6 +214,13 @@ def setup_training(self):
         torch.manual_seed(cfg["seed"])
 
     self.cfg = cfg
+    try:
+        self.rewards = REWARD_PROFILES[cfg["reward_profile"]]
+    except KeyError as exc:
+        choices = ", ".join(sorted(REWARD_PROFILES))
+        raise ValueError(
+            f"Unknown DQN_REWARD_PROFILE={cfg['reward_profile']!r}; choose {choices}"
+        ) from exc
     self.buffer = ReplayBuffer(
         cfg["buffer_size"],
         rng=random.Random(cfg["seed"] if cfg["seed"] >= 0 else None),
@@ -415,7 +448,7 @@ def _encode(self, game_state: dict):
 
 
 def _reward(self, events: List[str], phi_old: float, phi_new: float) -> float:
-    reward = sum(REWARDS.get(ev, 0.0) for ev in events) + STEP_PENALTY
+    reward = sum(self.rewards.get(ev, 0.0) for ev in events) + STEP_PENALTY
     if self.cfg["shaping"]:
         # Potential-based shaping, F = gamma_s * Phi(s') - Phi(s). Ng, Harada &
         # Russell (1999): a term of this form leaves the optimal policy

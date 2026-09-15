@@ -81,6 +81,7 @@ rather than a source edit, and every run is reproducible from its command line.
 | `DQN_SHAPING` | 1 | Set to 0 for the ablation. |
 | `DQN_SHAPING_SCALE` | 0.1 | Potential is `-scale * BFS distance to nearest coin`. |
 | `DQN_SEED` | -1 | Set a value for reproducible runs. |
+| `DQN_REWARD_PROFILE` | `curriculum` | Use `score` only for the final tournament-stage ablation. It removes positive crate, coin-found and good-bomb rewards while retaining safety shaping, so positive task progress matches actual scoreboard points. |
 
 ## Reward design
 
