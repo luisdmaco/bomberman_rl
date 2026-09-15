@@ -91,6 +91,7 @@ CONFIG = {
 # great as that of adding features", so bomb behaviour is taught through events
 # rather than through hand-built state features.
 GOOD_BOMB = "GOOD_BOMB"                  # will break crates or catch an opponent, and escapable
+OPPONENT_THREATENED = "OPPONENT_THREATENED"  # escapable bomb currently has an opponent in its blast
 USELESS_BOMB = "USELESS_BOMB"            # breaks nothing, hits nobody
 SUICIDAL_BOMB = "SUICIDAL_BOMB"          # no escape route exists from where it was dropped
 ESCAPED_DANGER = "ESCAPED_DANGER"        # was standing somewhere lethal, now is not
@@ -115,6 +116,9 @@ REWARDS = {
     # positive, which is the trap the spec warns about and which bit us once
     # already (LOG.md 2026-09-05).
     GOOD_BOMB: 1.0,     # was 0.4; a useful bomb has to beat the risk of taking it
+    # Logged for every profile, but deliberately neutral in the historical
+    # curriculum and score profiles. score_hunt below is the isolated ablation.
+    OPPONENT_THREATENED: 0.0,
     USELESS_BOMB: -0.3,
     SUICIDAL_BOMB: -3.0,     # heavy: this is the single biggest failure mode
     ESCAPED_DANGER: 0.5,
@@ -140,9 +144,19 @@ SCORE_REWARDS = {
     e.GOT_KILLED: -10.0,
 }
 
+# Targeted final-stage ablation. A real kill still pays +5 from the scoreboard;
+# this smaller immediate reward makes the rare, four-step-delayed kill signal
+# learnable without paying for crate-only demolition. It is emitted only when
+# the bomb is escapable, so aiming at an opponent never cancels SUICIDAL_BOMB.
+SCORE_HUNT_REWARDS = {
+    **SCORE_REWARDS,
+    OPPONENT_THREATENED: 0.5,
+}
+
 REWARD_PROFILES = {
     "curriculum": REWARDS,
     "score": SCORE_REWARDS,
+    "score_hunt": SCORE_HUNT_REWARDS,
 }
 STEP_PENALTY = -0.02
 
@@ -168,6 +182,8 @@ def _bomb_events(self, old_state, action, new_state, events):
             extra.append(SUICIDAL_BOMB)
         elif crates or opponents:
             extra.append(GOOD_BOMB)
+            if opponents:
+                extra.append(OPPONENT_THREATENED)
         else:
             extra.append(USELESS_BOMB)
 
@@ -249,7 +265,7 @@ def setup_training(self):
 
 LOG_COLUMNS = [
     "round", "steps", "score", "coins", "invalid_actions", "waited",
-    "crates", "good_bombs", "useless_bombs", "suicidal_bombs",
+    "crates", "good_bombs", "opponent_threat_bombs", "useless_bombs", "suicidal_bombs",
     "reward_sum", "epsilon", "mean_loss", "buffer",
 ]
 
@@ -282,6 +298,7 @@ def _reset_round_stats(self):
     self.round_steps = 0
     self.round_crates = 0
     self.round_good_bombs = 0
+    self.round_opponent_threat_bombs = 0
     self.round_useless_bombs = 0
     self.round_suicidal_bombs = 0
 
@@ -296,6 +313,7 @@ def _tally(self, events, reward):
     self.round_waited += events.count(e.WAITED)
     self.round_crates += events.count(e.CRATE_DESTROYED)
     self.round_good_bombs += events.count(GOOD_BOMB)
+    self.round_opponent_threat_bombs += events.count(OPPONENT_THREATENED)
     self.round_useless_bombs += events.count(USELESS_BOMB)
     self.round_suicidal_bombs += events.count(SUICIDAL_BOMB)
 
@@ -350,15 +368,17 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
         csv.writer(fh).writerow([
             self.current_round, self.round_steps, score, self.round_coins,
             self.round_invalid, self.round_waited, self.round_crates,
-            self.round_good_bombs, self.round_useless_bombs, self.round_suicidal_bombs,
+            self.round_good_bombs, self.round_opponent_threat_bombs,
+            self.round_useless_bombs, self.round_suicidal_bombs,
             round(self.round_reward, 3),
             round(self.epsilon, 4), round(mean_loss, 5), len(self.buffer),
         ])
 
     self.logger.info(
         f"Round {self.current_round}: score {score}, coins {self.round_coins}, "
-        f"crates {self.round_crates}, bombs good/useless/suicidal "
-        f"{self.round_good_bombs}/{self.round_useless_bombs}/{self.round_suicidal_bombs}, "
+        f"crates {self.round_crates}, bombs good/opponent/useless/suicidal "
+        f"{self.round_good_bombs}/{self.round_opponent_threat_bombs}/"
+        f"{self.round_useless_bombs}/{self.round_suicidal_bombs}, "
         f"eps {self.epsilon:.3f}, loss {mean_loss:.4f}"
     )
 

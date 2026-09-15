@@ -81,7 +81,7 @@ rather than a source edit, and every run is reproducible from its command line.
 | `DQN_SHAPING` | 1 | Set to 0 for the ablation. |
 | `DQN_SHAPING_SCALE` | 0.1 | Potential is `-scale * BFS distance to nearest coin`. |
 | `DQN_SEED` | -1 | Set a value for reproducible runs. |
-| `DQN_REWARD_PROFILE` | `curriculum` | Use `score` only for the final tournament-stage ablation. It removes positive crate, coin-found and good-bomb rewards while retaining safety shaping, so positive task progress matches actual scoreboard points. |
+| `DQN_REWARD_PROFILE` | `curriculum` | `score` keeps only scoreboard progress plus safety shaping. `score_hunt` preserves that profile and adds +0.5 when an escapable newly dropped bomb currently threatens an opponent; crate-only bombs remain neutral. |
 
 ## Reward design
 
@@ -96,6 +96,13 @@ reached it. The BFS runs only during training, so it costs nothing against the
 0.5 s per-step budget in official games.
 
 `DQN_SHAPING=0` gives the ablation for the report: same everything, no shaping.
+
+For the targeted tournament fine-tune, `DQN_REWARD_PROFILE=score_hunt` adds an
+immediate +0.5 signal when an escapable bomb has an opponent in its blast line.
+The eventual kill remains worth +5.0. Suicidal bombs never receive the targeted
+bonus, and ordinary crate demolition remains worth zero under this profile.
+The original `score` profile is unchanged so the r1250 result stays exactly
+reproducible.
 
 ## Known gaps
 

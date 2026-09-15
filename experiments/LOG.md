@@ -6,7 +6,7 @@ newest first.
 
 ---
 
-## STATUS (2026-09-14, team comparison prepared; final agent choice open)
+## STATUS (2026-09-15, targeted hunting fine-tune prepared; final agent choice open)
 
 **C r1000 remains the measured, submission-tested fallback in `models/`.
 `agent_code/dqn_agent/dqn-model.pt` currently contains score-profile r1500, not
@@ -63,12 +63,15 @@ profile is now implemented and verified, while the historical `curriculum`
 profile remains the default. The 1500-round fine-tune and r1250 confirmation
 are complete. At N=1000 r1250 passes the required average-score gate with
 margins +0.53 to +0.56 and 7.8% suicide, but finishes strictly first in only
-25.9% of rounds. The latest remote Q agent (`c0f36d7`) is now available as an
-exact unstaged snapshot in this working tree, and a shared frozen comparison is
-ready. The next action is for the team to confirm that `model.npy` is the
-intended Q checkpoint, then run
-`tools/compare_team_agents.py --rounds 200 --seed 211`. More identical DQN
-training is not justified. Project-wide work also remains: choose the best
+25.9% of rounds. The next DQN experiment is prepared as the isolated
+`score_hunt` profile: +0.5 for an escapable bomb whose blast currently contains
+an opponent, while crate-only bombs remain neutral. Resume from archived r1250
+with augmentation off, then select from the frozen curve using score,
+strict-first rate, kills and suicide. Do not continue the old `score` recipe.
+The latest remote Q agent (`c0f36d7`) is also available as an exact unstaged
+snapshot, and a shared frozen comparison is ready. The team should confirm that
+`model.npy` is the intended Q checkpoint, then run
+`tools/compare_team_agents.py --rounds 200 --seed 211`. Project-wide work also remains: choose the best
 overall tournament entry, make the repository public, commit and push the final
 artifacts, build a clean submission zip, test that exact zip in Docker, and
 write the report. See the 2026-09-13 entry below.
@@ -388,6 +391,66 @@ over the first half and the second half exploits.
 ---
 
 # Part 2 — Log
+
+## 2026-09-15 - Targeted opponent-bomb fine-tune prepared
+
+The r1250 diagnosis is specific: crowded suicide fell to 7.8%, but the policy
+still drops 44.2 bombs per round, scores only 0.186 kills per round and finishes
+strictly first in 25.9% of rounds. More identical `score` training is not
+justified because r1500 already regressed. The missing signal is not generic
+bombing; it is which bombs can turn into opponent score.
+
+Added `OPPONENT_THREATENED`, emitted only when a newly dropped bomb is escapable
+and its current blast line contains at least one opponent. Added a new
+`DQN_REWARD_PROFILE=score_hunt` that is the old score reward table plus +0.5 for
+that event. The eventual kill still pays +5.0. `GOOD_BOMB` remains zero, so
+crate-only demolition remains neutral. The historical `curriculum` and `score`
+profiles are unchanged, preserving every previous run's recipe.
+
+`training_log.csv` gains `opponent_threat_bombs`, a subset of `good_bombs`, so
+the run can prove whether this dense signal actually occurred. The existing
+header-protection logic will archive the previous training log automatically
+when the new run begins. The frozen checkpoint table also gains strict-first
+and tied-first rates, both on screen and in `eval_curve.csv`, because mean score
+alone hid the behaviour the user saw in the GUI.
+
+Focused tests cover an escapable opponent bomb, crate-only bomb, stone-blocked
+opponent, and an inescapable aimed bomb. All pass: the suicidal case receives
+no hunting bonus; the old `score` profile remains neutral; and `score_hunt`
+pays exactly +0.5 before the existing step cost. All augmentation checks still
+pass. A two-round frozen smoke run verified the strict-first/tied-first runtime
+path. N=2 is only a plumbing check and is not performance evidence. The first
+headless reward-test attempt stopped during pygame initialisation; the same test
+with dummy SDL video/audio drivers executed every assertion and passed.
+
+No model file was copied, no checkpoint was selected, and no training or long
+evaluation was started. Keep `models/task4-score-r1250-ego13.pt` untouched as
+the confirmed fallback. The prepared run is:
+
+```bash
+cp models/task4-score-r1250-ego13.pt agent_code/dqn_agent/dqn-model.pt
+
+DQN_REWARD_PROFILE=score_hunt \
+DQN_LR=0.0001 \
+DQN_EPS_START=0.08 \
+DQN_EPS_END=0.03 \
+DQN_EPS_DECAY=750 \
+DQN_AUGMENT=0 \
+DQN_SEED=131 \
+./venv/bin/python tools/train_curve.py \
+  --rounds 1500 \
+  --checkpoint-every 250 \
+  --eval-rounds 40 \
+  --scenario classic \
+  --opponents rule_based_agent rule_based_agent rule_based_agent \
+  --resume
+```
+
+This is a cautious fine-tune, not a promise of improvement. Shortlist only a
+checkpoint that improves the r1250 balance: frozen score 3.437 +/- 0.158,
+strict-first 25.9%, kill-in-round 17.9%, and suicide 7.8%. A 40-round curve is
+selection evidence only; confirm the chosen checkpoint at N=1000 on a new seed
+and re-measure the solo and task-3 gates before replacing the fallback.
 
 ## 2026-09-15 - Checkpoint curve now displays frozen score
 

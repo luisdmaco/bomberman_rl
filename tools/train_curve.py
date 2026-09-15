@@ -103,7 +103,8 @@ def train(rounds, checkpoint_every, scenario, resume, env_extra, opponents=()):
 SOLO_COLUMNS = ["rounds_trained", "frozen_coins", "ci95", "mean_steps", "invalid_per_round"]
 VERSUS_COLUMNS = ["rounds_trained", "frozen_coins", "ci95", "mean_steps",
                   "invalid_per_round", "suicide_rate", "kill_in_round",
-                  "score_margin", "margin_ci95", "frozen_score", "score_ci95"]
+                  "score_margin", "margin_ci95", "frozen_score", "score_ci95",
+                  "strict_first_rate", "tied_first_rate"]
 
 
 def evaluate_checkpoint(path, rounds, scenario, env_extra):
@@ -150,6 +151,9 @@ def evaluate_checkpoint_versus(path, rounds, scenario, opponents, env_extra):
     invalid = sum(m["invalid"] for m in mine) / max(1, n)
     suicide = sum(m["suicides"] for m in mine) / max(1, n)
     killed = sum(1 for m in mine if m["kills"] > 0) / max(1, n)
+    opponent_tops = [max(r[o]["score"] for o in opp_keys) for r in rows]
+    strict_first = sum(m["score"] > top for m, top in zip(mine, opponent_tops)) / max(1, n)
+    tied_first = sum(m["score"] == top for m, top in zip(mine, opponent_tops)) / max(1, n)
     # Gate 4 is "mean score strictly above rule_based_agent's", so the comparator
     # is a typical opponent, not the luckiest one in the round. With three of
     # them, max() reads about 2.5 points harsher than the gate does.
@@ -158,7 +162,8 @@ def evaluate_checkpoint_versus(path, rounds, scenario, opponents, env_extra):
          for r in rows])
     return dict(coins=coins, ci=ci, score=score, score_ci=score_ci,
                 steps=steps, invalid=invalid,
-                suicide=suicide, killed=killed, margin=margin, margin_ci=margin_ci)
+                suicide=suicide, killed=killed, margin=margin, margin_ci=margin_ci,
+                strict_first=strict_first, tied_first=tied_first)
 
 
 def main():
@@ -216,10 +221,12 @@ def main():
             row = [trained, round(m["coins"], 2), round(m["ci"], 2), round(m["steps"], 1),
                    round(m["invalid"], 2), round(m["suicide"], 4), round(m["killed"], 4),
                    round(m["margin"], 2), round(m["margin_ci"], 2),
-                   round(m["score"], 2), round(m["score_ci"], 2)]
+                   round(m["score"], 2), round(m["score_ci"], 2),
+                   round(m["strict_first"], 4), round(m["tied_first"], 4)]
             print(f"{trained:>6} rounds | score {m['score']:5.2f} +/- {m['score_ci']:4.2f} "
                   f"| coins {m['coins']:5.2f} +/- {m['ci']:4.2f} "
                   f"| suicide {m['suicide']:6.2%} | kill-in-round {m['killed']:6.2%} "
+                  f"| first {m['strict_first']:6.2%} (tie {m['tied_first']:6.2%}) "
                   f"| margin {m['margin']:+6.2f} +/- {m['margin_ci']:4.2f}", flush=True)
         else:
             coins, ci, steps, invalid = evaluate_checkpoint(
