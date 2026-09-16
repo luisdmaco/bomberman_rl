@@ -6,13 +6,21 @@ ways (mask + target network), and added opponent-directed reward shaping.
 Covers every file `git diff c0f36d7` reports as changed, plus the untracked
 artifacts sitting next to them.
 
-**Read this before trusting the numbers below**: `train.py`'s last edit
-(00:33, 2026-09-16) post-dates every result recorded in
-`resul_of_eval_classic.txt`, including the "LAST TRY AND SUCCESSFUL" entry.
-That means the two `P5` events (`AMBUSH_READY`, `WIN_ROUND`) were added
-*after* the successful run and have not themselves been validated by a
-training + eval cycle yet. Re-run `evaluate_models.py` after committing to
-confirm they don't regress it.
+**Correction (verified after the commits below landed)**: the original
+version of this file cautioned that `AMBUSH_READY`/`WIN_ROUND` were added
+*after* the successful run, based on `train.py`'s file mtime being newer
+than the other artifacts. That was wrong -- mtimes aren't reliable evidence
+(touching/reformatting a file changes them without changing behaviour).
+Proof: `training_log.csv`'s `win` column (`round own_score > max(opponent
+scores)`) can only be written by the current `end_of_round`/`write_round_log`
+code, which is the same edit that adds `WIN_ROUND`/`AMBUSH_READY`. Reading it
+with `csv.DictReader` (the file uses CRLF line endings, which silently broke
+a naive `awk` field check): **2474 / 3000 rounds (82.5%) are wins** against
+`peaceful_agent` + `coin_collector_agent`. `old_models/task3_better/training_log.csv`
+is a byte-identical copy of the same 3000 rounds, not a separate/earlier
+run -- it was archived there as task-4 prep, not because it was superseded.
+So: the full current code, `P5` events included, is already validated by
+this run. No retraining needed before moving on.
 
 ---
 
@@ -239,13 +247,14 @@ change was responsible).
   classic vs peaceful_agent+coin_collector_agent | 100 rounds | seed 42
   #1  model_round1000.npy   score 9.78  kills 0.830  suicides 0.290  margin +5.14
   ```
-  the best measured result so far — but see the caution at the top of this
-  file regarding the `P5` events added after this run.
+  the best measured result so far — confirmed (see the correction note at
+  the top of this file) to already reflect the full current code, `P5`
+  events included: 82.5% of this run's 3000 rounds were outright wins.
 - **`agent_code/q_agent/old_models/`** (gitignored, not part of any commit
-  here) — `task2/` holds every task-2 checkpoint; `task3_better/` holds an
-  earlier task-3 attempt (its own archived `training_log.csv` + `model_round*`
-  checkpoints, 250–3000) that was itself superseded by the run behind
-  `model_best.npy`.
+  here) — `task2/` holds every task-2 checkpoint. `task3_better/` is a
+  backup of the *same* run behind `model_best.npy` (its `training_log.csv`
+  is byte-identical to the live one), archived there ahead of starting
+  task-4 training, not because it was superseded.
 
 ## Unchanged
 `agent_code/q_agent/callbacks.py` and `agent_code/q_agent/README.md` — no
