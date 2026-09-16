@@ -119,7 +119,7 @@ def evaluate_checkpoint(path, rounds, scenario, env_extra):
     return mean, ci, sum(steps) / max(1, len(steps)), invalid / max(1, len(steps))
 
 
-def evaluate_checkpoint_versus(path, rounds, scenario, opponents, env_extra):
+def evaluate_checkpoint_versus(path, rounds, scenario, opponents, env_extra, agent=AGENT):
     """With opponents, in a SEPARATE PROCESS. That is not optional.
 
     `callbacks.MODEL_FILE` is a module-level constant built when the module is
@@ -132,7 +132,7 @@ def evaluate_checkpoint_versus(path, rounds, scenario, opponents, env_extra):
         out = tmp.name
     env = {**os.environ, **env_extra, "DQN_MODEL_FILE": str(path)}
     cmd = [sys.executable, "tools/evaluate3.py",
-           "--agents", AGENT, *opponents,
+           "--agents", agent, *opponents,
            "--scenario", scenario, "--n-rounds", str(rounds), "--json", out]
     result = subprocess.run(cmd, cwd=REPO, env=env, capture_output=True)
     if result.returncode != 0:
@@ -143,8 +143,8 @@ def evaluate_checkpoint_versus(path, rounds, scenario, opponents, env_extra):
     n = len(rows)
     # Duplicated opponents are renamed by the framework (rule_based_agent_0,
     # _1, _2), so the keys in the rows are not the names we asked for.
-    opp_keys = [k for k in rows[0] if k not in (AGENT, "_steps")]
-    mine = [r[AGENT] for r in rows]
+    opp_keys = [k for k in rows[0] if k not in (agent, "_steps")]
+    mine = [r[agent] for r in rows]
     coins, ci = mean_ci([m["coins"] for m in mine])
     score, score_ci = mean_ci([m["score"] for m in mine])
     steps = sum(r["_steps"] for r in rows) / max(1, n)
@@ -158,7 +158,7 @@ def evaluate_checkpoint_versus(path, rounds, scenario, opponents, env_extra):
     # is a typical opponent, not the luckiest one in the round. With three of
     # them, max() reads about 2.5 points harsher than the gate does.
     margin, margin_ci = mean_ci(
-        [r[AGENT]["score"] - statistics.fmean([r[o]["score"] for o in opp_keys])
+        [r[agent]["score"] - statistics.fmean([r[o]["score"] for o in opp_keys])
          for r in rows])
     return dict(coins=coins, ci=ci, score=score, score_ci=score_ci,
                 steps=steps, invalid=invalid,

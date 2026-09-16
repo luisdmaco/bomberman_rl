@@ -392,6 +392,117 @@ over the first half and the second half exploits.
 
 # Part 2 — Log
 
+## 16.09.2026 - Task-4 hyperparameter sweep: no factor beat the seed
+
+Six configurations, 5000 rounds each from scratch on `classic` against three
+`rule_based_agent`s, score reward profile, one core each. Five ran in
+parallel in 287 minutes wall clock; the sixth crashed after a minute and was
+re-run alone in a further 184 minutes (see below). Every 250-round checkpoint
+was then evaluated frozen, training off, 60 rounds per checkpoint, and the
+configurations ranked on the mean of the last five checkpoints (300 pooled
+rounds each) rather than on the best single checkpoint.
+
+| config | pooled margin | best checkpoint | score | suicide | kill/round |
+|---|---:|---:|---:|---:|---:|
+| ctrl_s2 | -1.401 | -1.117 @ r5000 | 1.76 | 31.0% | 12.0% |
+| augment | -2.008 | -1.611 @ r4750 | 1.36 | 46.7% | 12.0% |
+| target250 | -2.190 | -1.772 @ r4250 | 1.32 | 46.7% | 12.0% |
+| gamma99 | -2.354 | -1.711 @ r3250 | 1.14 | 53.0% | 9.7% |
+| ctrl_s1 | -2.431 | -2.067 @ r5000 | 1.02 | 54.0% | 10.7% |
+| global | -4.117 | -3.433 @ r1750 | 0.15 | 6.0% | 1.0% |
+
+**The two controls differ by 1.030 margin.** They share every hyperparameter and
+differ only in `DQN_SEED`. That number is the resolution of this experiment, and
+almost nothing survives it:
+
+- `DQN_GAMMA=0.99` (-2.354), `DQN_TARGET_UPDATE=250` (-2.190) and
+  `DQN_AUGMENT=1` (-2.008) all land *inside* the control band
+  [-2.431, -1.401]. None is separated from the control. The README's
+  long-standing "raise gamma for tasks 3 and 4" is not supported by this
+  measurement, and the 8-fold symmetry augmentation - the cheapest expected win
+  going in, and the one with a mechanistic reason to help an undertrained run -
+  bought nothing measurable either.
+- `DQN_VIEW=global` (-4.117) is the only configuration outside the band, and it
+  is 1.686 below the *worse* control. The coin-heaven result that motivated it,
+  where global overtook ego:13 after ~1000 rounds and reached 47.9 coins at
+  r2750, did not transfer to task 4 at all. The low 6.0% suicide rate does not show that the agent learned bomb safety, with 0.15 score and a kill in 1% of rounds it learned to stand still.
+
+The margin trajectories show that the ego runs were still improving at the
+end: ctrl_s2: -3.17, -3.02, -2.22, -1.12 at r1250/2500/3750/5000
+
+The global run stayed almost flat at around -4 throughout. This means that the from-scratch agents were probably still undertrained
+rather than fully converged. However, after 5000 rounds they were still
+1.95 margin points behind the existing candidate. In earlier experiments,
+the curves usually flattened before closing a gap of this size.
+
+**Nothing here is a submission candidate** - The current best agent is still the score-profile r1250 agent. It has a
++0.55 margin, a score of 3.437, and a 7.8% suicide rate over N=1000.
+
+The best configuration from this sweep reaches only -1.40 margin and has
+a 31% suicide rate. The 5000 from-scratch rounds therefore did not reproduce the performance that the curriculum had already achieved (task 1 coins, then task 2 crates, then a score-aligned fine-tune), the suicide rates alone say the from-scratch agents never learned bomb safety.
+
+This settles the 14.09. selection. Two runs that differ only in `DQN_SEED`
+end 1.03 margin apart after 5000 training rounds, measured over 300 pooled
+evaluation rounds each. A checkpoint picked because its 40-round reading was
++1.42 is therefore picked from inside the noise.
+
+The later N=1000 evaluation came back at +0.55, and that correction was
+predictably downward rather than merely different. Taking the best of six
+noisy checkpoints is an upward-biased estimator: the winner is the one whose
+noise happened to point up, so its value is expected to shrink on any
+re-measurement. A larger confirming sample alone would have been as likely to
+correct upward.
+
+### The augmentation arm crashed on Windows first
+
+The `augment` arm crashed about one minute after starting, at the first gradient step:
+
+```
+model.py:224  actions[idx] = _PERM[t][actions[idx]]
+
+RuntimeError: Index put requires the source and destination dtypes match,
+got Long for the destination and Int for the source
+```
+
+The problem was caused by a difference in data types. `np.arange(N_ACTIONS)`
+uses `int32` on Windows and `int64` on Linux. The `actions` tensor from
+`ReplayBuffer.sample` is always `torch.int64`. Because of this, the 8-fold dihedral augmentation works on Linux but crashes
+on Windows. `_INV` did not have this problem because `np.argsort` returns
+`int64` on both platforms.
+
+The issue was fixed by setting the data type explicitly in
+`action_permutation`. After that, `tools/test_augment.py` passed successfully.
+Section 4 of this test covers exactly this code path, so the test would have
+caught the problem if it had been run on Windows.
+
+The augmentation arm was then run separately. It completed 5000 rounds in
+184 minutes. Running all six arms in parallel took 287 minutes, meaning that
+running six jobs at the same time reduced the speed of each individual run
+by roughly half.
+
+The result of the separate run is included in the table above and does not
+change the overall conclusion.
+
+The failed one-minute run is kept as:
+
+`agent_code/dqn_archive_20260916-014521_augment/`
+
+### Tooling
+
+`tools/sweep.py` gained a `task4` preset (classic, three rule-based opponents,
+full action space, score profile) beside the frozen `task1` one that produced
+`sweep_results.csv`. It strips ambient `DQN_*` before each run, archives rather
+than deletes existing run directories, writes a manifest with the commit hash
+and every run's environment before training starts, and gives each run its own
+`--log-dir` (six parallel runs all defaulted to
+`logs/game.log` and the lines interleaved mid-write, which would have made a
+crashed run undiagnosable). `tools/compare.py` now reports score, margin,
+suicide and kill rate through `evaluate3.py`, ranks on the pooled tail, prints
+the control seed spread, and writes `sweep_task4_results.csv` without touching
+the tracked task-1 results. It also merges into that file instead of rewriting
+it: opening in "w" and writing only the current run's configurations meant a
+`--only` rerun of one arm silently deleted every other arm's rows.
+
 ## 2026-09-15 - Targeted opponent-bomb fine-tune prepared
 
 The r1250 diagnosis is specific: crowded suicide fell to 7.8%, but the policy
