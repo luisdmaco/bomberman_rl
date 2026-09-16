@@ -80,7 +80,8 @@ TRANSFORMS = [(k, f) for f in (False, True) for k in range(4)]
 
 def action_permutation(k: int, flip: bool) -> np.ndarray:
     """perm[a] is what action `a` becomes under (flip x, then rot90 k times)."""
-    perm = np.arange(N_ACTIONS)
+    # int64 on every platform; actions in sample() is torch.int64.
+    perm = np.arange(N_ACTIONS, dtype=np.int64)
     for a in range(N_MOVES):
         perm[a] = ((_FLIP_PERM[a] if flip else a) + k) % N_MOVES
     return perm
