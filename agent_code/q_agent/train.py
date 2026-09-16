@@ -31,6 +31,9 @@ WIN_ROUND = "WIN_ROUND"
 # TODO: are these the best values for our case?
 # Hyperparameter training
 def setup_training(self):
+
+    # use the last obtained checkpoint from Task 3 
+    self.model.load("model_task3_best.npy")
     
     self.epsilon = 0.2
     self.epsilon_min = 0.05

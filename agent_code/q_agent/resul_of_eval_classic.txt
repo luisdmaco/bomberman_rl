@@ -144,3 +144,63 @@ classic vs peaceful_agent+coin_collector_agent | 100 rounds | seed 42 | sorted b
  13  model_round2750.npy    5.68  0.480  0.280   3.28  37.69   -0.24
  14  model_3_diana.npy      6.41  0.390  0.250   4.46  54.56   -0.40
 
+TASK 4:
+
+results of the best model obtained in task 3 as BASELINE:
+=== task4_baseline_eval.json ===
+{'q_agent': {'bombs': 3055, 'coins': 541, 'crates': 6619, 'invalid': 53, 
+'kills': 21, 'moves': 26000, 'rounds': 100, 'score': 646, 'steps': 29534, 
+'suicides': 26, 'time': 27.487028121948242}, 
+'rule_based_agent': {'bombs': 1880, 'coins': 337, 'crates': 5421, 
+'invalid': 323, 'kills': 5, 'moves': 17967, 'rounds': 100, 'score': 362, 
+'steps': 20244, 'suicides': 53, 'time': 11.746239185333252}}
+
+=== task4_baseline_3rule_agent_eval.json ===
+{'q_agent': {'bombs': 2288, 'coins': 271, 'crates': 2914, 'invalid': 155, 
+'kills': 29, 'moves': 16590, 'rounds': 100, 'score': 416, 'steps': 19401, 
+'suicides': 55, 'time': 21.90918254852295}, 
+'rule_based_agent_0': {'bombs': 1966, 'coins': 213, 'crates': 3107, 'invalid': 682, 
+'kills': 21, 'moves': 19824, 'rounds': 100, 'score': 318, 'steps': 22547, 
+'suicides': 47, 'time': 14.044148206710815}, 
+'rule_based_agent_1': {'bombs': 1755, 'coins': 212, 'crates': 3145, 'invalid': 616, 
+'kills': 15, 'moves': 17519, 'rounds': 100, 'score': 287, 'steps': 19930, 
+'suicides': 58, 'time': 11.85129427909851}, 
+'rule_based_agent_2': {'bombs': 1839, 'coins': 202, 'crates': 3118, 'invalid': 649, 
+'kills': 7, 'moves': 19048, 'rounds': 100, 'score': 237, 'steps': 21585, 
+'suicides': 55, 'time': 13.197039604187012}}
+
+FIRST TRAINING:
+
+classic vs rule_based_agent | 100 rounds | seed 42 | sorted by margin
+
+  #  model                 score  kills suicid  coins crates  margin
+--------------------------------------------------------------------
+  1  model_round2500.npy    7.03  0.220  0.190   5.93  69.42   +3.94
+  2  model_round5750.npy    6.87  0.240  0.240   5.67  67.66   +3.56
+  3  model_round2750.npy    6.37  0.220  0.140   5.27  55.67   +3.42
+  4  model_round3750.npy    6.68  0.210  0.210   5.63  66.33   +3.24
+  5  model_round2000.npy    6.60  0.180  0.290   5.70  63.26   +3.22
+  6  model_round1000.npy    6.34  0.270  0.200   4.99  58.82   +2.88
+  7  model_round5250.npy    5.85  0.180  0.140   4.95  54.60   +2.78
+  8  model_task3_best.npy   6.34  0.220  0.350   5.24  64.23   +2.55
+  9  model_round3250.npy    5.93  0.190  0.170   4.98  55.74   +2.52
+ 10  model_round1250.npy    5.76  0.160  0.180   4.96  59.03   +2.24
+ 11  model_round4750.npy    5.42  0.190  0.200   4.47  51.07   +2.12
+ 12  model_round1750.npy    5.71  0.180  0.160   4.81  57.09   +2.06
+ 13  model_round3500.npy    5.61  0.240  0.250   4.41  49.27   +2.03
+ 14  model_round2250.npy    5.87  0.250  0.270   4.62  53.46   +1.98
+ 15  model_round5000.npy    5.34  0.170  0.290   4.49  52.58   +1.94
+ 16  model_round5500.npy    5.80  0.170  0.220   4.95  57.26   +1.87
+ 17  model_round4000.npy    5.48  0.120  0.250   4.88  54.88   +1.83
+ 18  model_round3000.npy    5.26  0.180  0.310   4.36  47.32   +1.71
+ 19  model_round4500.npy    5.32  0.120  0.260   4.72  52.73   +1.70
+ 20  model.npy              5.44  0.170  0.220   4.59  54.07   +1.66
+ 21  model_round500.npy     5.23  0.110  0.250   4.68  50.91   +1.57
+ 22  model_round4250.npy    5.08  0.220  0.210   3.98  44.57   +1.38
+ 23  model_round6000.npy    5.19  0.150  0.310   4.44  50.75   +1.27
+ 24  model_round750.npy     4.78  0.120  0.270   4.18  45.15   +0.85
+ 25  model_round250.npy     4.58  0.140  0.470   3.88  43.21   +0.40
+ 26  model_round1500.npy    4.50  0.130  0.230   3.85  41.07   +0.39
+
+win rate: {'q_agent': 0.86, 'rule_based_agent': 0.14}
+tie rate: 0.0
