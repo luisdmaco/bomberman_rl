@@ -36,13 +36,12 @@ def get_action_mask(game_state):
         elif danger_at(pos, dmap) == 0:
             mask[action] = False
 
-    # dont step onto tile we cannot escape from, but only while another
-    # move survives -- masking the last one hands us to the WAIT fallback
-    # CHANGE: 
-    # DESPUÉS (fix): siempre evalúa escape en cada movimiento; pruna los
-    #  condenados SOLO si queda alguno que sobreviva. Si ninguno sobrevive,
-    # NO prunes nada: correr (aunque sea a la desesperada) siempre es mejor
-    # que quedarse esperando la explosión de tu propia bomba.
+    # Prune moves that walk into a spot with no escape route, but only
+    # while at least one other move still survives -- otherwise pruning
+    # the last one would fall through to the WAIT fallback below, which
+    # is worse than trying even a doomed move. If every option is doomed,
+    # don't prune here; the block below keeps only the move whose blast
+    # arrives latest instead of leaving the choice to chance.
     if bombs:
         movable = [a for a in directions if mask[a]]
         if movable:
@@ -69,7 +68,6 @@ def get_action_mask(game_state):
                         mask[action] = False
 
     # WAIT is already banned at the top, only at the bottom can it be re-enabled
-
     # Bomb: ask what the blast catches
     blast = get_blast_coords(x, y, field)
     hits_crate = any(field[bx, by] == 1 for (bx, by) in blast)
