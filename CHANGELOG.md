@@ -259,3 +259,50 @@ change was responsible).
 ## Unchanged
 `agent_code/q_agent/callbacks.py` and `agent_code/q_agent/README.md` — no
 diff against `c0f36d7`.
+
+---
+
+## Task-4 kickoff — since `4669ccc`
+
+Scope: starting task 4 (`classic` vs 3× `rule_based_agent`), warm-started from
+the task-3 checkpoint instead of retraining from scratch.
+
+### `agent_code/q_agent/train.py`
+
+```diff
+ def setup_training(self):
++
++    # use the last obtained checkpoint from Task 3
++    self.model.load("model_task3_best.npy")
++
+     self.epsilon = 0.2
+```
+
+**Why**: `self.model` already exists as a fresh zero-init `LinearQModel` by
+the time `setup_training` runs (`agents.py` calls `self.setup()` before
+`setup_training`), so this line overwrites those zero weights with the task-3
+checkpoint's. It runs *before* `self.target_model = copy.deepcopy(self.model)`
+a few lines down, so the target network starts in sync with the loaded
+weights rather than with zeros. Verified the checkpoint's dimensions
+(34 weights per action) match the current `N_FEATURES` (34) before relying on
+this — no shape-mismatch risk this time, though `setup_training` still has no
+guard against a future mismatched checkpoint the way `callbacks.py`'s
+`setup()` does.
+
+### Data / artifacts (not code)
+
+- **`agent_code/q_agent/model_best.npy` deleted.** Superseded now that
+  `model_task3_best.npy` is the fixed warm-start reference and `model.npy`
+  tracks the live task-4 run.
+- **`agent_code/q_agent/training_log.csv` updated** — new rows from the
+  task-4 run (3×`rule_based_agent`), warm-started from `model_task3_best.npy`.
+  First-250 vs last-250 rounds: win rate 44.8% → 63.2%, kills 0.22 → 0.39,
+  suicides 0.54 → 0.39 (down), reward 29.6 → 45.5 — improving on every metric,
+  no regressions.
+- **`agent_code/q_agent/resul_of_eval_classic.txt` updated** — added the
+  solo (`classic` vs one `rule_based_agent`) sweep: best is
+  `model_round2500.npy` at score 7.03, margin **+3.94**, ahead of
+  `model_task3_best.npy` itself (+2.55), confirming the continued training is
+  net-positive rather than just replaying the task-3 checkpoint.
+- **`agent_code/q_agent/model.npy`** (untracked, gitignored) — live weights
+  for the in-progress task-4 run.
