@@ -1,0 +1,155 @@
+{
+  "protocol": {
+    "training": false,
+    "scenario": "classic",
+    "rounds": 200,
+    "seed": 157,
+    "opponents": [
+      "rule_based_agent",
+      "rule_based_agent",
+      "rule_based_agent"
+    ],
+    "dqn_model": "/Users/luisdmaco/Documents/bomberman_rl/models/task4-score-hunt-r1250-ego13.pt",
+    "q_model": "/Users/luisdmaco/Documents/bomberman_rl/agent_code/q_agent/model.npy"
+  },
+  "raw_files": {
+    "dqn_agent": "/Users/luisdmaco/Documents/bomberman_rl/experiments/runs/20260916-220356-dqn-r1250-n200-seed157.json",
+    "q_agent": "/Users/luisdmaco/Documents/bomberman_rl/experiments/runs/20260916-220356-q-agent-n200-seed157.json"
+  },
+  "results": {
+    "dqn_agent": {
+      "rounds": 200,
+      "opponents": [
+        "rule_based_agent_0",
+        "rule_based_agent_1",
+        "rule_based_agent_2"
+      ],
+      "score": {
+        "mean": 4.615,
+        "ci95": 0.3849629548189209
+      },
+      "coins": {
+        "mean": 3.065,
+        "ci95": 0.18541038605288918
+      },
+      "kills": {
+        "mean": 0.31,
+        "ci95": 0.06719618917167833
+      },
+      "suicides": {
+        "mean": 0.085,
+        "ci95": 0.03874802248155582
+      },
+      "bombs": {
+        "mean": 44.615,
+        "ci95": 1.9232967441427624
+      },
+      "invalid": {
+        "mean": 0.47,
+        "ci95": 0.10010483349190592
+      },
+      "mean_opponent_margin": {
+        "mean": 1.8583333333333332,
+        "ci95": 0.46453315061238315
+      },
+      "paired_margins": {
+        "rule_based_agent_0": {
+          "mean": 1.75,
+          "ci95": 0.5481999231839553,
+          "lower95": 1.2018000768160446,
+          "upper95": 2.2981999231839554
+        },
+        "rule_based_agent_1": {
+          "mean": 1.805,
+          "ci95": 0.5518758652570941,
+          "lower95": 1.2531241347429058,
+          "upper95": 2.356875865257094
+        },
+        "rule_based_agent_2": {
+          "mean": 2.02,
+          "ci95": 0.5148236335565236,
+          "lower95": 1.5051763664434765,
+          "upper95": 2.5348236335565235
+        }
+      },
+      "round_outcome": {
+        "strict_first": 86,
+        "tied_for_first": 25,
+        "behind_top": 89,
+        "strict_first_rate": 0.43,
+        "tied_for_first_rate": 0.125,
+        "behind_top_rate": 0.445
+      },
+      "suicide_upper95": 0.13189688544235392,
+      "kill_round_rate": 0.3,
+      "gate4_pass": true
+    },
+    "q_agent": {
+      "rounds": 200,
+      "opponents": [
+        "rule_based_agent_0",
+        "rule_based_agent_1",
+        "rule_based_agent_2"
+      ],
+      "score": {
+        "mean": 3.065,
+        "ci95": 0.3198889351857474
+      },
+      "coins": {
+        "mean": 2.44,
+        "ci95": 0.2204039489290461
+      },
+      "kills": {
+        "mean": 0.125,
+        "ci95": 0.04595032274972636
+      },
+      "suicides": {
+        "mean": 0.615,
+        "ci95": 0.06760790147392938
+      },
+      "bombs": {
+        "mean": 22.085,
+        "ci95": 1.5933282198848444
+      },
+      "invalid": {
+        "mean": 1.145,
+        "ci95": 0.20249030450143887
+      },
+      "mean_opponent_margin": {
+        "mean": 0.23333333333333328,
+        "ci95": 0.40316755871722865
+      },
+      "paired_margins": {
+        "rule_based_agent_0": {
+          "mean": 0.19,
+          "ci95": 0.4871630841440716,
+          "lower95": -0.2971630841440716,
+          "upper95": 0.6771630841440717
+        },
+        "rule_based_agent_1": {
+          "mean": 0.34,
+          "ci95": 0.4865782435905642,
+          "lower95": -0.14657824359056415,
+          "upper95": 0.8265782435905642
+        },
+        "rule_based_agent_2": {
+          "mean": 0.17,
+          "ci95": 0.5321828461239075,
+          "lower95": -0.3621828461239075,
+          "upper95": 0.7021828461239076
+        }
+      },
+      "round_outcome": {
+        "strict_first": 47,
+        "tied_for_first": 14,
+        "behind_top": 139,
+        "strict_first_rate": 0.235,
+        "tied_for_first_rate": 0.07,
+        "behind_top_rate": 0.695
+      },
+      "suicide_upper95": 0.6796680308208617,
+      "kill_round_rate": 0.125,
+      "gate4_pass": false
+    }
+  }
+}

@@ -6,13 +6,14 @@ newest first.
 
 ---
 
-## STATUS (2026-09-15, targeted hunting fine-tune prepared; final agent choice open)
+## STATUS (2026-09-16, score_hunt r1250 installed; submission packaging next)
 
-**C r1000 remains the measured, submission-tested fallback in `models/`.
-`agent_code/dqn_agent/dqn-model.pt` currently contains score-profile r1500, not
-C.** Score-profile r1250 passes the required mean-score gate at N=1000 and is
-much safer, but it is not a dominant per-round winner; do not install it until
-the remaining gates and final trade-off are decided.
+**score_hunt r1250 is installed as the leading tournament DQN. C r1000 remains
+the measured, submission-tested fallback in `models/`.** The live
+`agent_code/dqn_agent/dqn-model.pt` is byte-identical to
+`models/task4-score-hunt-r1250-ego13.pt`. The new candidate is a tournament
+specialist: it dominates the required four-player matchup but fails solo coins
+and the custom peaceful-agent hunting gate.
 Both finalists pass gate 4 over 1000 frozen rounds. C is effectively tied with
 A on tournament score and is substantially better on solo coins and both
 task-3 measures. A is safer, but that safety does not buy a higher score.
@@ -24,18 +25,20 @@ looked weak. That is consistent with the frozen matrix: C dies by suicide in
 Both are noisy policies, not robust round-by-round winners.
 
 Final-candidate measurements. Solo and tournament shape (us + 3 `rule_based`)
-are 1000 rounds. Task 3 is 300 rounds against `peaceful` and 400 against
-`coin_collector`. All runs are frozen.
+are 1000 rounds. score_hunt task 3 is 1000 rounds against `peaceful` and 400
+against `coin_collector`; older candidates used 300/400. All runs are frozen.
 
-| model | solo coins | DQN tournament score | weakest task-4 margin | suicide (crowded) | invalid (crowded) |
-|---|---|---|---|---|---|
-| **C r1000, selected** | **7.70 +/- 0.11** | 3.79 +/- 0.19 | +0.54 +/- 0.28 PASS | 32.50% (95% upper 35.47%) | 2.25 +/- 0.12 |
-| A r3750 | 6.33 +/- 0.13 | **3.81 +/- 0.19** | **+0.63 +/- 0.27 PASS** | **17.40% (95% upper 19.87%)** | **0.75 +/- 0.06** |
+| model                           | solo coins        | DQN tournament score | weakest task-4 margin   | suicide (crowded)             | invalid (crowded) |
+| ------------------------------- | ----------------- | -------------------- | ----------------------- | ----------------------------- | ----------------- |
+| **score_hunt r1250, installed** | 2.37 +/- 0.12     | **4.96 +/- 0.20**    | **+2.18 +/- 0.27 PASS** | **10.90% (95% upper 12.98%)** | **0.46 +/- 0.04** |
+| C r1000, fallback               | **7.70 +/- 0.11** | 3.79 +/- 0.19        | +0.54 +/- 0.28 PASS     | 32.50% (95% upper 35.47%)     | 2.25 +/- 0.12     |
+| A r3750                         | 6.33 +/- 0.13     | **3.81 +/- 0.19**    | **+0.63 +/- 0.27 PASS** | **17.40% (95% upper 19.87%)** | **0.75 +/- 0.06** |
 
-| model | kills `peaceful` in a round | margin vs `coin_collector` |
-|---|---|---|
-| **C r1000, selected** | **76.7% [95% 71.6%, 81.1%] FAIL** | **+0.13 +/- 0.40 FAIL** |
-| A r3750 | 59.3% [95% 53.9%, 64.7%] FAIL | -0.82 +/- 0.38 FAIL |
+| model                           | kills `peaceful` in a round       | margin vs `coin_collector` |
+| ------------------------------- | --------------------------------- | -------------------------- |
+| **score_hunt r1250, installed** | 3.0% [95% 2.1%, 4.3%] FAIL        | **+0.89 +/- 0.35 PASS**    |
+| C r1000, fallback               | **76.7% [95% 71.6%, 81.1%] FAIL** | **+0.13 +/- 0.40 FAIL**    |
+| A r3750                         | 59.3% [95% 53.9%, 64.7%] FAIL     | -0.82 +/- 0.38 FAIL        |
 
 C still bombs much more solo: 45.66 +/- 0.76 per round against A's
 31.16 +/- 0.49. That is the mechanism behind both its higher solo score and
@@ -43,16 +46,25 @@ its worse crowded-room safety.
 
 ### Gate scoreboard
 
-| task | gate | status |
-|---|---|---|
-| 1, `coin-heaven` | 45 of 50 coins, 0 invalid | **PASSED** 06.09, 46.06 coins |
-| 2, `classic` survival | suicide < 2% | **PASSED**, C 1.00% over 1000 rounds, 95% upper 1.83% |
-| 2, `classic` coins | 8 of 9 | not passed, C **7.70 +/- 0.11** over 1000 rounds |
-| 3, vs `peaceful` | kill in >= 80% of rounds | not passed, C **76.7% [95% 71.6%, 81.1%]** |
-| 3, vs `coin_collector` | positive margin | not passed, C +0.13 +/- 0.40; historical best +0.17 +/- 0.47 |
-| **4, vs `rule_based`** | **mean score strictly above** | **PASSED**, both finalists at 1000 rounds; every paired CI above zero |
+| task                   | gate                          | status                                                                                 |
+| ---------------------- | ----------------------------- | -------------------------------------------------------------------------------------- |
+| 1, `coin-heaven`       | 45 of 50 coins, 0 invalid     | **PASSED** 06.09, 46.06 coins                                                          |
+| 2, `classic` survival  | suicide < 2%                  | **PASSED**, score_hunt 0/1000 suicides, 95% upper 0.38%                                |
+| 2, `classic` coins     | 8 of 9                        | **FAIL**, score_hunt **2.37 +/- 0.12** over 1000 rounds                                |
+| 3, vs `peaceful`       | kill in >= 80% of rounds      | **FAIL**, score_hunt **3.0% [95% 2.1%, 4.3%]**                                         |
+| 3, vs `coin_collector` | positive margin               | **PASSED**, score_hunt **+0.89 +/- 0.35**, whole interval above zero                   |
+| **4, vs `rule_based`** | **mean score strictly above** | **PASSED**, score_hunt r1250 N=1000 score 4.96 +/- 0.20; weakest margin +2.18 +/- 0.27 |
 
 Tasks 1 to 3 and their thresholds are our own curriculum. Task 4 is the spec's.
+
+Confirmed leading DQN: `models/task4-score-hunt-r1250-ego13.pt`. On unseen
+N=1000 seed 223 it scores 4.961 +/- 0.202, has mean margin +2.250 +/- 0.238,
+finishes strictly first in 45.7% of rounds, kills in 34.5%, and suicides in
+10.9%. Every individual rule-based margin interval is far above zero. The
+tournament result is final-quality. The full gate audit is complete: solo coins
+and peaceful hunting fail badly, while solo survival and the coin-collector
+margin pass. That specialization is accepted because task 4 is the assignment's
+required tournament criterion; tasks 1 to 3 are the project's own curriculum.
 
 ### START HERE
 
@@ -63,15 +75,17 @@ profile is now implemented and verified, while the historical `curriculum`
 profile remains the default. The 1500-round fine-tune and r1250 confirmation
 are complete. At N=1000 r1250 passes the required average-score gate with
 margins +0.53 to +0.56 and 7.8% suicide, but finishes strictly first in only
-25.9% of rounds. The next DQN experiment is prepared as the isolated
-`score_hunt` profile: +0.5 for an escapable bomb whose blast currently contains
-an opponent, while crate-only bombs remain neutral. Resume from archived r1250
-with augmentation off, then select from the frozen curve using score,
-strict-first rate, kills and suicide. Do not continue the old `score` recipe.
-The latest remote Q agent (`c0f36d7`) is also available as an exact unstaged
-snapshot, and a shared frozen comparison is ready. The team should confirm that
-`model.npy` is the intended Q checkpoint, then run
-`tools/compare_team_agents.py --rounds 200 --seed 211`. Project-wide work also remains: choose the best
+25.9% of rounds. The isolated `score_hunt` fine-tune is complete and its r1250
+checkpoint is confirmed at N=1000: score 4.961, strict-first 45.7%,
+kill-in-round 34.5%, suicide 10.9%, and all three paired margin intervals far
+above zero. The gate audit then exposed strong specialization: solo 2.37 coins,
+peaceful kill-in-round 3.0%, but coin-collector margin +0.89. No more training.
+The exact archived r1250 is now installed; build and test the exact submission
+payload before committing the final model.
+The shared N=200 comparison against the current Q `model.npy` is complete: DQN
+passes gate 4 and is strictly first in 43.0% of rounds; Q fails and is strictly
+first in 23.5%. Unless the Q owner supplies a newer intended checkpoint, the
+current evidence selects DQN. Project-wide work still remains: choose the best
 overall tournament entry, make the repository public, commit and push the final
 artifacts, build a clean submission zip, test that exact zip in Docker, and
 write the report. See the 2026-09-13 entry below.
@@ -89,12 +103,13 @@ directly, so neither launcher changes the installed `dqn-model.pt`.
 
 ### The two candidate models, archived
 
-| file | what it is |
-|---|---|
-| `models/task4-C-solo-refresh-r1000-ego13.pt` | **selected**. Solo 7.70 +/- 0.11; gate 4 passes; task-3 leader; 32.50% crowded suicide (95% upper 35.47%) |
-| `models/task4-A-mixed-r3750-ego13.pt` | safer finalist. Solo 6.33 +/- 0.13; gate 4 passes; 17.40% crowded suicide (95% upper 19.87%) |
-| `models/task4-classic-r3250-ego13.pt` | the specialist both were built from. Gate 4 +0.78 at 1000 rounds, solo coins only 4.95 |
-| `models/task2-classic-r3750-ego13.pt` | the task-2 all-rounder. Solo coins 7.65, fails gate 4 at -1.02 |
+| file                                         | what it is                                                                                                                            |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `models/task4-score-hunt-r1250-ego13.pt`     | **installed tournament candidate**. Score 4.96 +/- 0.20; strict first 45.7%; gate 4 passes; solo and peaceful specialist checks fail. |
+| `models/task4-C-solo-refresh-r1000-ego13.pt` | fallback. Solo 7.70 +/- 0.11; gate 4 passes; task-3 leader; 32.50% crowded suicide (95% upper 35.47%)                                 |
+| `models/task4-A-mixed-r3750-ego13.pt`        | safer finalist. Solo 6.33 +/- 0.13; gate 4 passes; 17.40% crowded suicide (95% upper 19.87%)                                          |
+| `models/task4-classic-r3250-ego13.pt`        | the specialist both were built from. Gate 4 +0.78 at 1000 rounds, solo coins only 4.95                                                |
+| `models/task2-classic-r3750-ego13.pt`        | the task-2 all-rounder. Solo coins 7.65, fails gate 4 at -1.02                                                                        |
 
 All four are gitignored and need `git add -f`.
 
@@ -127,14 +142,14 @@ the gate. I predicted it would swing back and lose the gate. It did neither.
 
 ### Reference numbers
 
-| | |
-|---|---|
-| Task 1 best (frozen) | 47.39 coins in 234 steps |
-| `rule_based_agent`, solo `classic` | 8.60 coins, 0.00% suicide |
-| `rule_based_agent`, tournament shape | 3.30 mean score, 6.9 invalid actions/round |
-| Random walk, `coin-heaven` | ~18 coins |
-| Submission dry run | **PASSED 12.09 with selected C**, stock settings, 0 crashes |
-| Augmentation ablation | implemented, tested, never run |
+|                                      |                                                             |
+| ------------------------------------ | ----------------------------------------------------------- |
+| Task 1 best (frozen)                 | 47.39 coins in 234 steps                                    |
+| `rule_based_agent`, solo `classic`   | 8.60 coins, 0.00% suicide                                   |
+| `rule_based_agent`, tournament shape | 3.30 mean score, 6.9 invalid actions/round                  |
+| Random walk, `coin-heaven`           | ~18 coins                                                   |
+| Submission dry run                   | **PASSED 12.09 with selected C**, stock settings, 0 crashes |
+| Augmentation ablation                | implemented, tested, never run                              |
 
 ---
 
@@ -162,7 +177,7 @@ Gate: kills the peaceful agent in >= 80% of rounds; positive margin vs the coin
 collector.
 Status: baseline measured 2026-09-10 with the task-2 weights, neither half
 passed. 74.5% and -0.54. Note that the framework's round statistics sum `coins`,
-`kills` and `suicides` over *all* agents, so from this task onward
+`kills` and `suicides` over _all_ agents, so from this task onward
 `tools/evaluate.py` cannot answer either gate; use `tools/evaluate3.py`.
 
 **Task 4.** Against `rule_based_agent` and self-play. **This is the only gate the
@@ -202,14 +217,14 @@ rather than six unrelated experiments.
 Shared by all six: BOMB masked out of the action set, 13x13 egocentric view,
 one CPU thread each, `coin-heaven` scenario.
 
-| Config | What differs from baseline | Question it answers |
-|---|---|---|
-| `baseline` | nothing | The reference the others are measured against |
-| `no_shaping` | `DQN_SHAPING=0` | Does the distance-to-coin bonus help at all? |
-| `global_view` | `DQN_VIEW=global`, the full 17x17 board | Is the egocentric crop helping or hurting? |
-| `lr_2e4` | `DQN_LR` 5e-4 -> 2e-4 | Is it learning too fast to stay stable? |
-| `batch32` | batch 32 every 4 steps, not 128 every 16 | Do smaller, more frequent updates learn better? |
-| `old_shaping` | the pre-fix reward shaping, deliberately | How much did the shaping fix actually change? |
+| Config        | What differs from baseline               | Question it answers                             |
+| ------------- | ---------------------------------------- | ----------------------------------------------- |
+| `baseline`    | nothing                                  | The reference the others are measured against   |
+| `no_shaping`  | `DQN_SHAPING=0`                          | Does the distance-to-coin bonus help at all?    |
+| `global_view` | `DQN_VIEW=global`, the full 17x17 board  | Is the egocentric crop helping or hurting?      |
+| `lr_2e4`      | `DQN_LR` 5e-4 -> 2e-4                    | Is it learning too fast to stay stable?         |
+| `batch32`     | batch 32 every 4 steps, not 128 every 16 | Do smaller, more frequent updates learn better? |
+| `old_shaping` | the pre-fix reward shaping, deliberately | How much did the shaping fix actually change?   |
 
 `batch32` looks like two changes but is one: 32 x (1/4) and 128 x (1/16) both
 consume 8 samples per environment step, so the data seen is identical and only
@@ -225,16 +240,16 @@ on with gamma 1.0 / scale 0.05 / cap 10.
 
 Every configuration gets an identical budget.
 
-| | |
-|---|---|
-| Rounds | 3,000 |
-| Environment steps | ~1,200,000 |
-| Weight updates | 75,000 (300,000 for `batch32`) |
-| Transitions drawn from the buffer | ~9,600,000 |
-| Each experience reused | ~8 times |
-| Exploration | epsilon 1.0 -> 0.05 over the first 1,500 rounds |
-| Checkpoints saved | every 250 rounds, so 12 per run |
-| Replay buffer memory | ~100 MB per run (uint8) |
+|                                   |                                                 |
+| --------------------------------- | ----------------------------------------------- |
+| Rounds                            | 3,000                                           |
+| Environment steps                 | ~1,200,000                                      |
+| Weight updates                    | 75,000 (300,000 for `batch32`)                  |
+| Transitions drawn from the buffer | ~9,600,000                                      |
+| Each experience reused            | ~8 times                                        |
+| Exploration                       | epsilon 1.0 -> 0.05 over the first 1,500 rounds |
+| Checkpoints saved                 | every 250 rounds, so 12 per run                 |
+| Replay buffer memory              | ~100 MB per run (uint8)                         |
 
 Measured wall clock, six in parallel on an M3 Max, one core each:
 
@@ -255,50 +270,50 @@ scores.
 
 ## What each file is
 
-| File | What it is | Trust it? |
-|---|---|---|
-| `agent_code/dqn_agent/training_log.csv` | One row per round **during** training | For debugging only. NOT a learning curve. |
-| `agent_code/dqn_agent/eval_curve.csv` | Frozen model measured at each checkpoint | **Yes. This is the real curve.** |
-| `agent_code/dqn_agent/checkpoints/dqn-rNNNNNN.pt` | Weights snapshot at round NNNNNN | The raw material for the curve |
-| `agent_code/dqn_agent/dqn-model.pt` | Working copy the game loads | Overwritten by any training run. Not an archive. |
-| `models/*.pt` | **The measured models, tracked in git** | The only copies that survive a clean checkout |
-| `agent_code/dqn_agent/logs/dqn_agent.log` | Every action and its Q values | For diagnosing weird behaviour |
+| File                                              | What it is                               | Trust it?                                        |
+| ------------------------------------------------- | ---------------------------------------- | ------------------------------------------------ |
+| `agent_code/dqn_agent/training_log.csv`           | One row per round **during** training    | For debugging only. NOT a learning curve.        |
+| `agent_code/dqn_agent/eval_curve.csv`             | Frozen model measured at each checkpoint | **Yes. This is the real curve.**                 |
+| `agent_code/dqn_agent/checkpoints/dqn-rNNNNNN.pt` | Weights snapshot at round NNNNNN         | The raw material for the curve                   |
+| `agent_code/dqn_agent/dqn-model.pt`               | Working copy the game loads              | Overwritten by any training run. Not an archive. |
+| `models/*.pt`                                     | **The measured models, tracked in git**  | The only copies that survive a clean checkout    |
+| `agent_code/dqn_agent/logs/dqn_agent.log`         | Every action and its Q values            | For diagnosing weird behaviour                   |
 
 ## The tools
 
-| Script | What it does |
-|---|---|
-| `tools/evaluate.py` | Measures one agent frozen, against a gate. Works on any agent, not just the DQN. |
-| `tools/evaluate3.py` | Per-agent, per-round measurement. The only tool that can answer a gate with an opponent on the board, because the framework's own round statistics are summed over all agents. `--gate 3`. |
-| `tools/test_others.py` | 41 checks that the agent actually perceives opponents: channel 3, the ego crop, opponents' bombs as danger, opponents' bodies as blocked tiles, and a live game against `peaceful_agent`. |
-| `tools/train_curve.py` | One continuous training run with checkpoints, then an honest frozen curve from them. `--opponents` sets who is in the training game; `--eval-opponents` sets who the frozen curve is measured against, which should be the gate's opponents and not the training ones. |
-| `tools/compare.py` | Evaluates every sweep configuration frozen, in parallel, into one table. Applies each config's own settings, so a global-view model is not evaluated with an egocentric network. |
-| `tools/confirm.py` | Re-measures the leaders over 200 rounds instead of 40, and only calls PASS when the whole interval clears the bar. |
-| `tools/sweep.py` | Runs several configurations at once, one core each. |
-| `tools/watch_sweep.py` | Progress of a running sweep, read off disk from another terminal. |
-| `tools/profile_step.py` | Where a training round's time actually goes. |
+| Script                  | What it does                                                                                                                                                                                                                                                           |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tools/evaluate.py`     | Measures one agent frozen, against a gate. Works on any agent, not just the DQN.                                                                                                                                                                                       |
+| `tools/evaluate3.py`    | Per-agent, per-round measurement. The only tool that can answer a gate with an opponent on the board, because the framework's own round statistics are summed over all agents. `--gate 3`.                                                                             |
+| `tools/test_others.py`  | 41 checks that the agent actually perceives opponents: channel 3, the ego crop, opponents' bombs as danger, opponents' bodies as blocked tiles, and a live game against `peaceful_agent`.                                                                              |
+| `tools/train_curve.py`  | One continuous training run with checkpoints, then an honest frozen curve from them. `--opponents` sets who is in the training game; `--eval-opponents` sets who the frozen curve is measured against, which should be the gate's opponents and not the training ones. |
+| `tools/compare.py`      | Evaluates every sweep configuration frozen, in parallel, into one table. Applies each config's own settings, so a global-view model is not evaluated with an egocentric network.                                                                                       |
+| `tools/confirm.py`      | Re-measures the leaders over 200 rounds instead of 40, and only calls PASS when the whole interval clears the bar.                                                                                                                                                     |
+| `tools/sweep.py`        | Runs several configurations at once, one core each.                                                                                                                                                                                                                    |
+| `tools/watch_sweep.py`  | Progress of a running sweep, read off disk from another terminal.                                                                                                                                                                                                      |
+| `tools/profile_step.py` | Where a training round's time actually goes.                                                                                                                                                                                                                           |
 
 ## Reading `eval_curve.csv`
 
 This is the one that matters.
 
-| Column | Meaning | What good looks like |
-|---|---|---|
-| `rounds_trained` | How much training had happened | x-axis of your plot |
-| `frozen_coins` | Coins per round, training OFF | Must climb past 18, then toward 45 |
-| `ci95` | Half-width of the 95% confidence interval | Smaller is more certain. If two points overlap, they are not different. |
-| `mean_steps` | Steps per round | **400 means it never finished.** Dropping toward ~150 means it is collecting everything and ending early. This is a great early signal. |
-| `invalid_per_round` | Times it walked into a wall | Should go to ~0 |
+| Column              | Meaning                                   | What good looks like                                                                                                                    |
+| ------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `rounds_trained`    | How much training had happened            | x-axis of your plot                                                                                                                     |
+| `frozen_coins`      | Coins per round, training OFF             | Must climb past 18, then toward 45                                                                                                      |
+| `ci95`              | Half-width of the 95% confidence interval | Smaller is more certain. If two points overlap, they are not different.                                                                 |
+| `mean_steps`        | Steps per round                           | **400 means it never finished.** Dropping toward ~150 means it is collecting everything and ending early. This is a great early signal. |
+| `invalid_per_round` | Times it walked into a wall               | Should go to ~0                                                                                                                         |
 
 With `--opponents`, four more columns appear and `frozen_coins` stops being the
 headline, because somebody else is collecting them too:
 
-| Column | Meaning | What good looks like |
-|---|---|---|
-| `suicide_rate` | Share of rounds ending in our own bomb | Must fall. Baseline vs `coin_collector` is 13.25% |
-| `kill_in_round` | Share of rounds with at least one kill | Gate 3 wants >= 80% against `peaceful_agent` |
-| `score_margin` | Our score minus the best opponent's, per round | Gate 3 wants this positive |
-| `margin_ci95` | Half-width of its 95% interval | At 40 eval rounds this is about +/- 2. The curve is a shortlist, not a measurement. |
+| Column          | Meaning                                        | What good looks like                                                                |
+| --------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `suicide_rate`  | Share of rounds ending in our own bomb         | Must fall. Baseline vs `coin_collector` is 13.25%                                   |
+| `kill_in_round` | Share of rounds with at least one kill         | Gate 3 wants >= 80% against `peaceful_agent`                                        |
+| `score_margin`  | Our score minus the best opponent's, per round | Gate 3 wants this positive                                                          |
+| `margin_ci95`   | Half-width of its 95% interval                 | At 40 eval rounds this is about +/- 2. The curve is a shortlist, not a measurement. |
 
 A 40-round curve point is noisy enough that the same weights measured twice gave
 3.48 coins / 24% suicide and 4.28 coins / 8% suicide. Shortlist from the curve,
@@ -342,27 +357,27 @@ appending wider rows under a narrower header.
 Set on the command line; nothing needs a source edit. Official games set no
 environment at all, so every default here must be the one we want to ship.
 
-| Variable | Default | Effect |
-|---|---|---|
-| `DQN_VIEW` | `ego:13` | `global` for the whole board. **Stored inside the checkpoint**, so a saved model rebuilds its own architecture. |
-| `DQN_ACTIONS` | all six | Curriculum restriction, e.g. `UP,RIGHT,DOWN,LEFT` for task 1. |
-| `DQN_LEGAL_MASK` | `1` | Drop moves the game would reject. `0` for the ablation. |
-| `DQN_EXPLORE_BOMB` | `0.10` | Probability a random exploratory action is BOMB. Shapes exploration only. |
-| `DQN_GAMMA` | `0.95` | Discount. |
-| `DQN_LR` | `5e-4` | Adam learning rate. |
-| `DQN_BATCH` / `DQN_TRAIN_EVERY` | `128` / `16` | Batch size and update interval. Their ratio is the replay ratio. |
-| `DQN_BUFFER` / `DQN_LEARN_START` | `50000` / `2000` | Replay capacity, and transitions before the first update. |
-| `DQN_TARGET_UPDATE` | `1000` | Gradient steps between target syncs. |
-| `DQN_EPS_START` / `DQN_EPS_END` / `DQN_EPS_DECAY` | `1.0` / `0.05` / `400` | Set decay to about half the rounds. |
-| `DQN_SHAPING` | `1` | `0` for the ablation. |
-| `DQN_SHAPING_SCALE` / `_GAMMA` / `_CAP` | `0.05` / `1.0` / `10` | See 2026-09-05: the discounted, uncapped version paid the agent to idle. |
-| `DQN_CHECKPOINT_EVERY` | `0` | Numbered snapshots. The curve tools set it. |
-| `DQN_MODEL_FILE` | agent's own | Point evaluation at one specific checkpoint. A relative path is resolved **against the repo root, not the shell's working directory**, and a path that does not exist raises. Both are scars; see 2026-09-10. |
-| `DQN_RESUME` | `0` | Continue from existing weights. |
-| `DQN_OPPONENT_MASK` | `1` at play, `0` in training | Widen the survivability mask: an escape route an opponent can occupy first is not an escape. Measured 2026-09-10: self-kills 20.25% -> 13.25% against `coin_collector_agent`. |
-| `DQN_PLAY_EPSILON` | `0.0` | Noise at play time. A patch, not a fix. |
-| `DQN_THREADS` | `1` | One thread per process; run processes in parallel instead. |
-| `DQN_SEED` | `-1` | Set for a reproducible run. |
+| Variable                                          | Default                      | Effect                                                                                                                                                                                                        |
+| ------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DQN_VIEW`                                        | `ego:13`                     | `global` for the whole board. **Stored inside the checkpoint**, so a saved model rebuilds its own architecture.                                                                                               |
+| `DQN_ACTIONS`                                     | all six                      | Curriculum restriction, e.g. `UP,RIGHT,DOWN,LEFT` for task 1.                                                                                                                                                 |
+| `DQN_LEGAL_MASK`                                  | `1`                          | Drop moves the game would reject. `0` for the ablation.                                                                                                                                                       |
+| `DQN_EXPLORE_BOMB`                                | `0.10`                       | Probability a random exploratory action is BOMB. Shapes exploration only.                                                                                                                                     |
+| `DQN_GAMMA`                                       | `0.95`                       | Discount.                                                                                                                                                                                                     |
+| `DQN_LR`                                          | `5e-4`                       | Adam learning rate.                                                                                                                                                                                           |
+| `DQN_BATCH` / `DQN_TRAIN_EVERY`                   | `128` / `16`                 | Batch size and update interval. Their ratio is the replay ratio.                                                                                                                                              |
+| `DQN_BUFFER` / `DQN_LEARN_START`                  | `50000` / `2000`             | Replay capacity, and transitions before the first update.                                                                                                                                                     |
+| `DQN_TARGET_UPDATE`                               | `1000`                       | Gradient steps between target syncs.                                                                                                                                                                          |
+| `DQN_EPS_START` / `DQN_EPS_END` / `DQN_EPS_DECAY` | `1.0` / `0.05` / `400`       | Set decay to about half the rounds.                                                                                                                                                                           |
+| `DQN_SHAPING`                                     | `1`                          | `0` for the ablation.                                                                                                                                                                                         |
+| `DQN_SHAPING_SCALE` / `_GAMMA` / `_CAP`           | `0.05` / `1.0` / `10`        | See 2026-09-05: the discounted, uncapped version paid the agent to idle.                                                                                                                                      |
+| `DQN_CHECKPOINT_EVERY`                            | `0`                          | Numbered snapshots. The curve tools set it.                                                                                                                                                                   |
+| `DQN_MODEL_FILE`                                  | agent's own                  | Point evaluation at one specific checkpoint. A relative path is resolved **against the repo root, not the shell's working directory**, and a path that does not exist raises. Both are scars; see 2026-09-10. |
+| `DQN_RESUME`                                      | `0`                          | Continue from existing weights.                                                                                                                                                                               |
+| `DQN_OPPONENT_MASK`                               | `1` at play, `0` in training | Widen the survivability mask: an escape route an opponent can occupy first is not an escape. Measured 2026-09-10: self-kills 20.25% -> 13.25% against `coin_collector_agent`.                                 |
+| `DQN_PLAY_EPSILON`                                | `0.0`                        | Noise at play time. A patch, not a fix.                                                                                                                                                                       |
+| `DQN_THREADS`                                     | `1`                          | One thread per process; run processes in parallel instead.                                                                                                                                                    |
+| `DQN_SEED`                                        | `-1`                         | Set for a reproducible run.                                                                                                                                                                                   |
 
 ## The commands
 
@@ -392,6 +407,191 @@ over the first half and the second half exploits.
 
 # Part 2 — Log
 
+## 2026-09-16 - Gate audit exposes specialization; confirmed r1250 installed
+
+The user completed the full frozen audit of score_hunt r1250 after its N=1000
+tournament confirmation.
+
+| shape                     | rounds | result                                                                      |
+| ------------------------- | -----: | --------------------------------------------------------------------------- |
+| solo `classic`            |   1000 | 2.37 +/- 0.12 coins, 0.00% suicide, 0 invalid, 400 steps                    |
+| vs `peaceful_agent`       |   1000 | 3.0% kill-in-round [95% 2.1%, 4.3%], 0.00% suicide, +2.61 +/- 0.15 margin   |
+| vs `coin_collector_agent` |    400 | **+0.89 +/- 0.35 margin PASS**, 8.5% kill-in-round, 4.0% suicide            |
+| vs 3x `rule_based_agent`  |   1000 | **4.961 +/- 0.202 score, +2.250 +/- 0.238 margin, 45.7% strict first PASS** |
+
+This policy is not a general improvement. It is a strong tournament specialist.
+Solo coins collapse from C's 7.70 to 2.37, and peaceful hunting collapses from
+76.7% to 3.0%. Conversely, the coin-collector gate now passes decisively and
+the required tournament margin is roughly four times C's.
+
+The mechanism is visible in bombing rate: 44.25 bombs per round against three
+rule-based agents, 32.54 against the coin collector, but only 12.50 both solo
+and against the peaceful agent. The targeted reward taught the policy to bomb
+under opponent pressure. Rule-based agents approach and create dense attack
+opportunities; the peaceful agent remains distant, so the policy neither opens
+the board aggressively nor learns to seek it. This explains both the real
+tournament gain and the curriculum regressions without treating either as a
+measurement contradiction.
+
+Tasks 1 to 3 and their gates are project-defined curriculum checks. Task 4,
+mean score above the rule-based agent in the four-player classic game, is the
+assignment requirement. Selection therefore follows task 4: score_hunt r1250
+remains the final DQN candidate, and the specialization will be reported rather
+than hidden. No further training is justified this close to submission.
+
+Copied `models/task4-score-hunt-r1250-ego13.pt` into
+`agent_code/dqn_agent/dqn-model.pt` and verified both files have SHA-256
+`2e82ef5eae3f0114a39a82cd9e5089647ea139bce0a028536a9ae4b39eae52b0`.
+The archived r1500 checkpoint remains available. A one-round stock-settings
+smoke test against three random agents loaded `dqn-model.pt` with view `ego:13`,
+reached the normal 400-step wrap-up, shut down cleanly, and had no agent error
+or decision-time violation. It is a crash/configuration check, not performance
+evidence. The exact ZIP/Docker submission test is still outstanding.
+
+## 2026-09-16 - score_hunt r1250 confirmed at N=1000
+
+The user completed the required large frozen confirmation on unseen seed 223:
+score_hunt r1250 against three `rule_based_agent`s, classic scenario, training
+off, 1000 rounds. Raw rows are
+`experiments/runs/20260916-221511-dqn-r1250-n1000-seed223.json`; the summary is
+`experiments/runs/20260916-221511-team-comparison-n1000-seed223.json`.
+
+| metric                  |    score_hunt r1250, N=1000 |
+| ----------------------- | --------------------------: |
+| score                   |         **4.961 +/- 0.202** |
+| coins                   |             3.051 +/- 0.091 |
+| kills                   |             0.382 +/- 0.035 |
+| kill-in-round           |                   **34.5%** |
+| suicide                 | **10.9%**, 95% upper 12.98% |
+| bombs                   |            44.251 +/- 0.865 |
+| invalid                 |             0.455 +/- 0.041 |
+| margin vs mean opponent |        **+2.250 +/- 0.238** |
+| strict first            |        **457/1000 = 45.7%** |
+| tied first              |              95/1000 = 9.5% |
+| behind top              |            448/1000 = 44.8% |
+
+Paired margins are +2.290 +/- 0.265, +2.281 +/- 0.271 and
++2.178 +/- 0.267. Their 95% lower bounds are +2.025, +2.010 and +1.911.
+Gate 4 passes by a large margin under every interpretation used in this project.
+
+The N=200 result reproduced and slightly strengthened: score 4.615 -> 4.961,
+strict-first 43.0% -> 45.7%, kill-in-round 30.0% -> 34.5%, and mean margin
++1.858 -> +2.250. Against confirmed old score r1250, the new model gains 1.524
+score, 19.8 percentage points of strict-first frequency and approximately
+doubles mean kills (0.186 -> 0.382). Suicide rises from 7.8% to 10.9%, the
+measured cost of the more aggressive policy, but remains far below C's 32.5%.
+
+**Decision: score_hunt r1250 is the leading DQN tournament checkpoint.** No
+further training is justified. It still must be measured solo and against the
+two task-3 opponents because the project rule is to remeasure every gate after
+each policy-changing run. Keep the live r1500 out of commits; install the
+archived r1250 only after that audit.
+
+Remaining frozen audit commands, using the archive directly:
+
+```bash
+DQN_MODEL_FILE=models/task4-score-hunt-r1250-ego13.pt \
+./venv/bin/python tools/evaluate.py --agents dqn_agent \
+  --scenario classic --n-rounds 1000 --seed 227
+
+DQN_MODEL_FILE=models/task4-score-hunt-r1250-ego13.pt \
+./venv/bin/python tools/evaluate3.py --agents dqn_agent peaceful_agent \
+  --scenario classic --n-rounds 1000 --seed 229 --gate 3
+
+DQN_MODEL_FILE=models/task4-score-hunt-r1250-ego13.pt \
+./venv/bin/python tools/evaluate3.py --agents dqn_agent coin_collector_agent \
+  --scenario classic --n-rounds 400 --seed 233 --gate 3
+```
+
+## 2026-09-16 - score_hunt r1250 passes N=200 and decisively beats Q
+
+The user ran the shared frozen comparison on unseen seed 157: score_hunt r1250
+and the teammate's current Q checkpoint, each separately against three
+`rule_based_agent`s for 200 rounds, training off. Raw rows and the summary are
+stored under `experiments/runs/` with prefix `20260916-220356`.
+
+| candidate                |               score |           vs mean RB | strict first | top tie |  suicide | kill-in-round |   gate 4 |
+| ------------------------ | ------------------: | -------------------: | -----------: | ------: | -------: | ------------: | -------: |
+| **DQN score_hunt r1250** | **4.615 +/- 0.385** | **+1.858 +/- 0.465** |    **43.0%** |   12.5% | **8.5%** |     **30.0%** | **PASS** |
+| Q `model.npy`            |     3.065 +/- 0.320 |     +0.233 +/- 0.403 |        23.5% |    7.0% |    61.5% |         12.5% |     FAIL |
+
+The DQN's three paired margins are +1.750 +/- 0.548,
++1.805 +/- 0.552 and +2.020 +/- 0.515. Their 95% lower bounds are +1.202,
++1.253 and +1.505, respectively, so this is not a near-threshold pass. The DQN
+was strictly first in 86/200 rounds and tied first in 25; Q was strictly first
+in 47 and tied in 14. DQN mean kills were 0.310 per round, coins 3.065, bombs
+44.615 and invalid actions 0.470.
+
+This is the first statistically valid confirmation that the new candidate is
+better than the visual one-in-four policy. It also gives the team a clear
+choice over the current Q checkpoint under the shared protocol. However, r1250
+was selected as the best of six 40-round checkpoints, so the project's
+selection-bias rule still requires N=1000 on a fresh seed before installation
+or a final report claim.
+
+Added `--dqn-only` to `tools/compare_team_agents.py` so that final confirmation
+does not waste time reevaluating the already measured Q agent. Default behavior
+is unchanged. A disposable two-round run to `/tmp` passed end to end and is not
+performance evidence. No long confirmation or training was started. Run:
+
+```bash
+./venv/bin/python tools/compare_team_agents.py \
+  --rounds 1000 \
+  --seed 223 \
+  --dqn-model models/task4-score-hunt-r1250-ego13.pt \
+  --dqn-only
+```
+
+## 2026-09-16 - score_hunt finished; r1250 is a strong but unconfirmed shortlist
+
+The user completed the prepared 1500-round continuous fine-tune from confirmed
+score r1250 against three `rule_based_agent`s: `score_hunt`, learning rate
+0.0001, epsilon 0.08 -> 0.03 over 750 rounds, augmentation off, training seed 131. Training took 18.1 minutes. The prior six checkpoints were moved to
+`archive-20260915-202648/` before the run.
+
+Frozen curve, 40 rounds per checkpoint:
+
+|   rounds |             score |   suicide | kill-in-round | strict first (tie) |        mean margin |
+| -------: | ----------------: | --------: | ------------: | -----------------: | -----------------: |
+|      250 |     4.45 +/- 0.98 |     15.0% |         35.0% |       32.5% (7.5%) |     +1.39 +/- 1.22 |
+|      500 |     3.23 +/- 0.93 |     20.0% |         20.0% |       35.0% (5.0%) |     +0.22 +/- 1.18 |
+|      750 |     3.90 +/- 0.67 |      7.5% |         20.0% |      35.0% (17.5%) |     +1.32 +/- 0.85 |
+|     1000 |     5.08 +/- 1.11 |     15.0% |         37.5% |       45.0% (7.5%) |     +2.41 +/- 1.36 |
+| **1250** | **5.20 +/- 1.02** | **12.5%** |     **32.5%** |  **52.5% (10.0%)** | **+2.66 +/- 1.20** |
+|     1500 |     5.00 +/- 1.03 |     12.5% |         32.5% |       42.5% (7.5%) |     +2.42 +/- 1.21 |
+
+**r1250 is the only shortlist.** It has the best frozen score, margin and
+strict-first rate, while r1500 has already fallen back. Compared with confirmed
+old score r1250, the point estimates move from score 3.437 to 5.20,
+strict-first 25.9% to 52.5%, and kill-in-round 17.9% to 32.5%. Suicide moves
+from 7.8% to 12.5%. These sample sizes differ (1000 versus 40), so this is a
+reason to confirm, not yet evidence that any metric truly changed.
+
+Training health is clean: exactly 1500 rows, rounds 1 through 1500, epsilon
+reached 0.03 at round 750 and stayed there, and the replay buffer reached
+50,000 continuously. Mean loss fell to about 0.04 in the last 500 rounds.
+Training-time score rose from 1.80 in rounds 1-250 to 3.39 in rounds 1251-1500,
+but remains diagnostic only.
+
+The new reward signal was dense and increasingly used. There were 13,361
+`opponent_threat_bombs` in total: 3.58 per round in rounds 1-250, rising in
+every 250-round block to 13.37 per round in rounds 1251-1500. Good bombs rose
+from 11.49 to 23.88 per round over the same blocks. That does not prove
+causality, but it verifies that the new event was not dead and gives a plausible
+mechanism for the higher kill and score points.
+
+Copied the shortlist byte-for-byte to
+`models/task4-score-hunt-r1250-ego13.pt`, SHA-256
+`2e82ef5eae3f0114a39a82cd9e5089647ea139bce0a028536a9ae4b39eae52b0`.
+The live `agent_code/dqn_agent/dqn-model.pt` remains the run's inferior r1500,
+SHA-256 `01c5c32c3a343ca18b6ba19453f116bb71ed8ab4a20989b2017cca30fb74c137`.
+The confirmed old r1250 archive is unchanged.
+
+No long confirmation was started. Because the candidate was selected as the
+best of six noisy 40-round points, first check it at N=200 on an unseen seed.
+If it remains clearly better, use N=1000 before a final claim or installation,
+then re-measure every curriculum gate.
+
 ## 16.09.2026 - Task-4 hyperparameter sweep: no factor beat the seed
 
 Six configurations, 5000 rounds each from scratch on `classic` against three
@@ -402,28 +602,28 @@ was then evaluated frozen, training off, 60 rounds per checkpoint, and the
 configurations ranked on the mean of the last five checkpoints (300 pooled
 rounds each) rather than on the best single checkpoint.
 
-| config | pooled margin | best checkpoint | score | suicide | kill/round |
-|---|---:|---:|---:|---:|---:|
-| ctrl_s2 | -1.401 | -1.117 @ r5000 | 1.76 | 31.0% | 12.0% |
-| augment | -2.008 | -1.611 @ r4750 | 1.36 | 46.7% | 12.0% |
-| target250 | -2.190 | -1.772 @ r4250 | 1.32 | 46.7% | 12.0% |
-| gamma99 | -2.354 | -1.711 @ r3250 | 1.14 | 53.0% | 9.7% |
-| ctrl_s1 | -2.431 | -2.067 @ r5000 | 1.02 | 54.0% | 10.7% |
-| global | -4.117 | -3.433 @ r1750 | 0.15 | 6.0% | 1.0% |
+| config    | pooled margin | best checkpoint | score | suicide | kill/round |
+| --------- | ------------: | --------------: | ----: | ------: | ---------: |
+| ctrl_s2   |        -1.401 |  -1.117 @ r5000 |  1.76 |   31.0% |      12.0% |
+| augment   |        -2.008 |  -1.611 @ r4750 |  1.36 |   46.7% |      12.0% |
+| target250 |        -2.190 |  -1.772 @ r4250 |  1.32 |   46.7% |      12.0% |
+| gamma99   |        -2.354 |  -1.711 @ r3250 |  1.14 |   53.0% |       9.7% |
+| ctrl_s1   |        -2.431 |  -2.067 @ r5000 |  1.02 |   54.0% |      10.7% |
+| global    |        -4.117 |  -3.433 @ r1750 |  0.15 |    6.0% |       1.0% |
 
 **The two controls differ by 1.030 margin.** They share every hyperparameter and
 differ only in `DQN_SEED`. That number is the resolution of this experiment, and
 almost nothing survives it:
 
 - `DQN_GAMMA=0.99` (-2.354), `DQN_TARGET_UPDATE=250` (-2.190) and
-  `DQN_AUGMENT=1` (-2.008) all land *inside* the control band
+  `DQN_AUGMENT=1` (-2.008) all land _inside_ the control band
   [-2.431, -1.401]. None is separated from the control. The README's
   long-standing "raise gamma for tasks 3 and 4" is not supported by this
   measurement, and the 8-fold symmetry augmentation - the cheapest expected win
   going in, and the one with a mechanistic reason to help an undertrained run -
   bought nothing measurable either.
 - `DQN_VIEW=global` (-4.117) is the only configuration outside the band, and it
-  is 1.686 below the *worse* control. The coin-heaven result that motivated it,
+  is 1.686 below the _worse_ control. The coin-heaven result that motivated it,
   where global overtook ego:13 after ~1000 rounds and reached 47.9 coins at
   r2750, did not transfer to task 4 at all. The low 6.0% suicide rate does not show that the agent learned bomb safety, with 0.15 score and a kill in 1% of rounds it learned to stand still.
 
@@ -644,14 +844,14 @@ seed 107. Raw per-round data is
 exactly 1000 rows and the expected three independently named rule-based
 opponents.
 
-| metric | score-profile r1250 |
-|---|---:|
-| DQN score | 3.437 +/- 0.158 |
-| coins | 2.507 +/- 0.087 |
-| kills | 0.186 +/- 0.025 |
-| suicide | 7.80% (78/1000) |
-| bombs | 44.199 +/- 0.872 |
-| invalid | 0.328 +/- 0.035 |
+| metric         |                   score-profile r1250 |
+| -------------- | ------------------------------------: |
+| DQN score      |                       3.437 +/- 0.158 |
+| coins          |                       2.507 +/- 0.087 |
+| kills          |                       0.186 +/- 0.025 |
+| suicide        |                       7.80% (78/1000) |
+| bombs          |                      44.199 +/- 0.872 |
+| invalid        |                       0.328 +/- 0.035 |
 | margin vs RB 0 | +0.560 +/- 0.233, CI [+0.327, +0.793] |
 | margin vs RB 1 | +0.534 +/- 0.235, CI [+0.299, +0.769] |
 | margin vs RB 2 | +0.559 +/- 0.229, CI [+0.330, +0.788] |
@@ -686,14 +886,14 @@ to `checkpoints/archive-20260914-165646/` before the run.
 
 Frozen curve, 40 rounds per checkpoint:
 
-| rounds | coins | suicide | kill-in-round | mean margin |
-|---:|---:|---:|---:|---:|
-| 250 | 2.40 +/- 0.37 | 15.0% | 17.5% | -0.26 +/- 0.92 |
-| 500 | 2.20 +/- 0.35 | 10.0% | 10.0% | -0.43 +/- 0.78 |
-| 750 | 1.48 +/- 0.39 | 5.0% | 25.0% | -0.39 +/- 0.97 |
-| 1000 | 2.10 +/- 0.41 | 17.5% | 5.0% | -0.70 +/- 0.73 |
-| **1250** | **3.00 +/- 0.47** | **2.5%** | 12.5% | **+1.42 +/- 1.03** |
-| 1500 | 2.33 +/- 0.49 | 2.5% | 10.0% | +0.10 +/- 1.10 |
+|   rounds |             coins |  suicide | kill-in-round |        mean margin |
+| -------: | ----------------: | -------: | ------------: | -----------------: |
+|      250 |     2.40 +/- 0.37 |    15.0% |         17.5% |     -0.26 +/- 0.92 |
+|      500 |     2.20 +/- 0.35 |    10.0% |         10.0% |     -0.43 +/- 0.78 |
+|      750 |     1.48 +/- 0.39 |     5.0% |         25.0% |     -0.39 +/- 0.97 |
+|     1000 |     2.10 +/- 0.41 |    17.5% |          5.0% |     -0.70 +/- 0.73 |
+| **1250** | **3.00 +/- 0.47** | **2.5%** |         12.5% | **+1.42 +/- 1.03** |
+|     1500 |     2.33 +/- 0.49 |     2.5% |         10.0% |     +0.10 +/- 1.10 |
 
 r1250 is the only candidate. The entire 40-round interval is above zero, but
 the interval is wide and the r1500 regression shows that the result is not a
@@ -894,10 +1094,10 @@ constructed every agent with `train=False`. Raw terminal output is in
 
 ### Gate 4, 1000 rounds, us plus three `rule_based_agent`s
 
-| model | DQN score | margin vs RB 0 | margin vs RB 1 | margin vs RB 2 | suicide | invalid |
-|---|---|---|---|---|---|---|
+| model       | DQN score     | margin vs RB 0 | margin vs RB 1 | margin vs RB 2 | suicide                   | invalid       |
+| ----------- | ------------- | -------------- | -------------- | -------------- | ------------------------- | ------------- |
 | **C r1000** | 3.79 +/- 0.19 | +0.63 +/- 0.26 | +0.62 +/- 0.26 | +0.54 +/- 0.28 | 32.50% (95% upper 35.47%) | 2.25 +/- 0.12 |
-| A r3750 | 3.81 +/- 0.19 | +0.77 +/- 0.26 | +0.63 +/- 0.27 | +0.68 +/- 0.26 | 17.40% (95% upper 19.87%) | 0.75 +/- 0.06 |
+| A r3750     | 3.81 +/- 0.19 | +0.77 +/- 0.26 | +0.63 +/- 0.27 | +0.68 +/- 0.26 | 17.40% (95% upper 19.87%) | 0.75 +/- 0.06 |
 
 Both pass: even the weakest paired 95% interval is wholly above zero. A's
 safety advantage is real, but the two DQN score intervals are effectively
@@ -905,10 +1105,10 @@ identical.
 
 ### Task 2, solo `classic`, 1000 rounds
 
-| model | coins | suicide | invalid |
-|---|---|---|---|
+| model       | coins             | suicide                      | invalid       |
+| ----------- | ----------------- | ---------------------------- | ------------- |
 | **C r1000** | **7.70 +/- 0.11** | 1.00% (95% upper 1.83%) PASS | 0.00 +/- 0.00 |
-| A r3750 | 6.33 +/- 0.13 | 0.50% (95% upper 1.17%) PASS | 0.00 +/- 0.00 |
+| A r3750     | 6.33 +/- 0.13     | 0.50% (95% upper 1.17%) PASS | 0.00 +/- 0.00 |
 
 Both pass survival and fail the 8-coin gate. C's whole coin interval is below
 8, so the preliminary 7.87 +/- 0.19 at 300 rounds was not a pass and did not
@@ -916,10 +1116,10 @@ hold as the final estimate.
 
 ### Task 3
 
-| model | kills `peaceful` in a round (300r) | margin vs `coin_collector` (400r) |
-|---|---|---|
-| **C r1000** | **76.7% [95% 71.6%, 81.1%] FAIL** | **+0.13 +/- 0.40 FAIL** |
-| A r3750 | 59.3% [95% 53.9%, 64.7%] FAIL | -0.82 +/- 0.38 FAIL |
+| model       | kills `peaceful` in a round (300r) | margin vs `coin_collector` (400r) |
+| ----------- | ---------------------------------- | --------------------------------- |
+| **C r1000** | **76.7% [95% 71.6%, 81.1%] FAIL**  | **+0.13 +/- 0.40 FAIL**           |
+| A r3750     | 59.3% [95% 53.9%, 64.7%] FAIL      | -0.82 +/- 0.38 FAIL               |
 
 Neither gate passes. C repaired most of the specialist's loss against
 `peaceful_agent` and is close in point estimate, but its 95% lower bound is well
@@ -952,10 +1152,10 @@ the STATUS block, run on the M3 Max.
 Two runs, both resumed from `task4-classic-r3250-ego13.pt`, the specialist that
 passes gate 4 but collects 4.95 coins solo against r3750's 7.65.
 
-| | what it changed | rounds | wall clock |
-|---|---|---|---|
-| **A** | opponents: `rule_based`, `rule_based`, `peaceful` instead of 3x `rule_based` | 4000 | 21.4 min |
-| **C** | solo board, `DQN_LR=2e-4`, `DQN_EPS_START=0.1` | 1500 | **7.6 min** |
+|       | what it changed                                                              | rounds | wall clock  |
+| ----- | ---------------------------------------------------------------------------- | ------ | ----------- |
+| **A** | opponents: `rule_based`, `rule_based`, `peaceful` instead of 3x `rule_based` | 4000   | 21.4 min    |
+| **C** | solo board, `DQN_LR=2e-4`, `DQN_EPS_START=0.1`                               | 1500   | **7.6 min** |
 
 Both curves measured against three `rule_based_agent`s regardless of what they
 trained on, using the new `--eval-opponents`. That flag exists because of
@@ -966,10 +1166,10 @@ mistaken for a better agent.
 
 Solo, 300 frozen rounds, the specialist against its parent:
 
-| | coins | crates | **bombs** | suicide |
-|---|---|---|---|---|
-| r3750 | 7.65 | 114.7 | **47.6** | 1.00% |
-| r3250 specialist | 4.95 | 90.8 | **26.5** | 0.00% |
+|                  | coins | crates | **bombs** | suicide |
+| ---------------- | ----- | ------ | --------- | ------- |
+| r3750            | 7.65  | 114.7  | **47.6**  | 1.00%   |
+| r3250 specialist | 4.95  | 90.8   | **26.5**  | 0.00%   |
 
 It was not lost, looping or dying. It dropped barely half as many bombs. Four
 thousand rounds of being punished by `rule_based_agent`s taught it caution, and
@@ -981,19 +1181,19 @@ learn the distinction because it never saw an empty board.
 
 Solo at 300 rounds, tournament shape at 400 unless noted:
 
-| model | solo coins | solo bombs | task-4 margin | suicide (crowded) | invalid |
-|---|---|---|---|---|---|
-| r3750 all-rounder | **7.65** +/- 0.24 | 47.6 | -1.02 +/- 0.40 (200r) fail | 42.50% | 1.00 |
-| r3250 specialist | 4.95 +/- 0.31 | 26.5 | +0.78 +/- 0.25 (1000r) PASS | 33.20% | 2.35 |
-| **A r3750** | 6.49 +/- 0.24 | 31.3 | +0.58 +/- 0.34 PASS | **15.25%** | **0.74** |
-| A r2750 | 5.18 +/- 0.29 | 27.2 | +0.44 +/- 0.35 PASS | 13.25% | 0.71 |
-| **C r1000** | **7.87** +/- 0.19 | 46.2 | +0.66 +/- 0.38 PASS | 31.75% | 2.15 |
+| model             | solo coins        | solo bombs | task-4 margin               | suicide (crowded) | invalid  |
+| ----------------- | ----------------- | ---------- | --------------------------- | ----------------- | -------- |
+| r3750 all-rounder | **7.65** +/- 0.24 | 47.6       | -1.02 +/- 0.40 (200r) fail  | 42.50%            | 1.00     |
+| r3250 specialist  | 4.95 +/- 0.31     | 26.5       | +0.78 +/- 0.25 (1000r) PASS | 33.20%            | 2.35     |
+| **A r3750**       | 6.49 +/- 0.24     | 31.3       | +0.58 +/- 0.34 PASS         | **15.25%**        | **0.74** |
+| A r2750           | 5.18 +/- 0.29     | 27.2       | +0.44 +/- 0.35 PASS         | 13.25%            | 0.71     |
+| **C r1000**       | **7.87** +/- 0.19 | 46.2       | +0.66 +/- 0.38 PASS         | 31.75%            | 2.15     |
 
 **All three new checkpoints pass gate 4**, and the bombing-rate column tracks
 the solo coins almost exactly, which is the diagnosis confirming itself.
 
 **C is the result.** 7.6 minutes of solo training at a fifth of the learning
-rate recovered solo coins to 7.87, *above* the 7.65 it started life at and the
+rate recovered solo coins to 7.87, _above_ the 7.65 it started life at and the
 best number this project has produced, while keeping the task-4 margin at +0.66
 with the whole interval above zero. I predicted the opposite: "standard result
 is that it swings back and loses the gate". It did neither. Best value per
@@ -1047,11 +1247,11 @@ task-3 run: the opponent.
 
 `models/task4-classic-r3250-ego13.pt`, frozen, in the tournament shape:
 
-| | rounds | seed | our score | `rule_based` | margin |
-|---|---|---|---|---|---|
-| shortlist from the curve | 40 | - | | | +1.23 +/- 1.08 |
-| confirmation | 400 | 41 | 4.24 | 3.25 | **+0.99** +/- 0.40 |
-| re-confirmation | **1000** | **77** | 4.08 | 3.30 | **+0.78** +/- 0.25 |
+|                          | rounds   | seed   | our score | `rule_based` | margin             |
+| ------------------------ | -------- | ------ | --------- | ------------ | ------------------ |
+| shortlist from the curve | 40       | -      |           |              | +1.23 +/- 1.08     |
+| confirmation             | 400      | 41     | 4.24      | 3.25         | **+0.99** +/- 0.40 |
+| re-confirmation          | **1000** | **77** | 4.08      | 3.30         | **+0.78** +/- 0.25 |
 
 **Gate 4 PASSED.** The whole interval, [+0.53, +1.03], is above zero at 1000
 rounds on a seed the model was not shortlisted on. Baseline r3750 in the same
@@ -1064,16 +1264,16 @@ spec actually requires.
 
 Same weights, everything else we measure:
 
-| | r3750 (task-2 weights) | **task-4 r3250** |
-|---|---|---|
-| solo `classic`, coins (task-2 gate) | **7.51** | **4.34** +/- 0.38 |
-| solo `classic`, suicide | 0.60% | **0.50%** |
-| solo `classic`, invalid actions | 0 | 0 |
-| tournament shape, margin | -1.02 +/- 0.40 | **+0.78** +/- 0.25 |
-| 1v1 vs `rule_based`, margin | -1.85 +/- 0.50 | -0.89 +/- 0.45 |
-| vs `coin_collector`, margin | **+0.17** +/- 0.47 | -0.25 +/- 0.43 |
-| vs `peaceful`, kill-in-round | **69.2%** | 37.7% |
-| vs `peaceful`, margin | **+10.80** | +6.58 |
+|                                     | r3750 (task-2 weights) | **task-4 r3250**   |
+| ----------------------------------- | ---------------------- | ------------------ |
+| solo `classic`, coins (task-2 gate) | **7.51**               | **4.34** +/- 0.38  |
+| solo `classic`, suicide             | 0.60%                  | **0.50%**          |
+| solo `classic`, invalid actions     | 0                      | 0                  |
+| tournament shape, margin            | -1.02 +/- 0.40         | **+0.78** +/- 0.25 |
+| 1v1 vs `rule_based`, margin         | -1.85 +/- 0.50         | -0.89 +/- 0.45     |
+| vs `coin_collector`, margin         | **+0.17** +/- 0.47     | -0.25 +/- 0.43     |
+| vs `peaceful`, kill-in-round        | **69.2%**              | 37.7%              |
+| vs `peaceful`, margin               | **+10.80**             | +6.58              |
 
 It beats three `rule_based_agent`s and is worse at everything else, including
 the base game it was built on. Solo coin collection fell from 7.51 of 9 to 4.34.
@@ -1100,10 +1300,10 @@ it climbed from 0.010 to 0.147 per round, and frozen it reached 0.366. The
 margin gained almost entirely through kills, exactly the channel I had written
 off.
 
-| run | total kills over 4000 rounds | deaths per kill | kills/round, first -> last block |
-|---|---|---|---|
-| task 3, vs `coin_collector` | 81 | 46 to 1 | 0.003 -> 0.025, flat |
-| task 4, vs 3x `rule_based` | **258** | 14.7 to 1 | 0.010 -> **0.147**, rising |
+| run                         | total kills over 4000 rounds | deaths per kill | kills/round, first -> last block |
+| --------------------------- | ---------------------------- | --------------- | -------------------------------- |
+| task 3, vs `coin_collector` | 81                           | 46 to 1         | 0.003 -> 0.025, flat             |
+| task 4, vs 3x `rule_based`  | **258**                      | 14.7 to 1       | 0.010 -> **0.147**, rising       |
 
 So the refinement to this morning's lesson: **signal density is a property of the
 opponent's behaviour, not just of our policy.** `rule_based_agent` walks toward
@@ -1120,11 +1320,11 @@ would do to solo coin collection, and the answer was -3.17 coins.
 
 Invalid actions per round, which have been 0.00 all project:
 
-| | ours | `rule_based`'s |
-|---|---|---|
-| solo | 0.000 | - |
-| tournament shape, r3750 | 1.005 | 6.87 |
-| tournament shape, r3250 | 2.348 | 6.92 |
+|                         | ours  | `rule_based`'s |
+| ----------------------- | ----- | -------------- |
+| solo                    | 0.000 | -              |
+| tournament shape, r3750 | 1.005 | 6.87           |
+| tournament shape, r3250 | 2.348 | 6.92           |
 
 Not a defect introduced by training: in a crowded game an opponent can step into
 the tile we chose after `legal_actions` judged it free, and the reference agent
@@ -1135,10 +1335,10 @@ standard was zero. Worth a sentence in the report rather than silence.
 
 Two models, a clean trade-off, and 6 days:
 
-| | r3750 | r3250 |
-|---|---|---|
-| passes | task 1, task-2 survival | **task 4** |
-| fails | task 4, task-3 margin | task-2 coins, both task-3 numbers |
+|        | r3750                   | r3250                             |
+| ------ | ----------------------- | --------------------------------- |
+| passes | task 1, task-2 survival | **task 4**                        |
+| fails  | task 4, task-3 margin   | task-2 coins, both task-3 numbers |
 
 `agent_code/dqn_agent/dqn-model.pt` currently holds the task-4 r4000 weights,
 which are neither of these. Whatever ships has to be copied in and re-tested
@@ -1147,32 +1347,32 @@ against stock settings before 17.09.
 ## 2026-09-10 (night) - Task 4 baseline, and the margin taken apart
 
 `models/task2-classic-r3750-ego13.pt`, frozen, mask on, no task-4 training. Two
-setups, because the gate does not say which and they disagree about *why* we
+setups, because the gate does not say which and they disagree about _why_ we
 lose.
 
-| | our score | `rule_based` | margin | our suicide | they killed us | our kills |
-|---|---|---|---|---|---|---|
-| 1v1, 400 rounds | 3.99 | 5.84 | **-1.85** +/- 0.50 | **38.25%** | 17.5% of rounds | 4.2% of rounds |
-| us + 3 `rule_based`, 200 rounds | 2.56 | 3.58 (mean of 3) | **-1.02** +/- 0.40 | **42.50%** | 74.5% of rounds | 11.5% of rounds |
+|                                 | our score | `rule_based`     | margin             | our suicide | they killed us  | our kills       |
+| ------------------------------- | --------- | ---------------- | ------------------ | ----------- | --------------- | --------------- |
+| 1v1, 400 rounds                 | 3.99      | 5.84             | **-1.85** +/- 0.50 | **38.25%**  | 17.5% of rounds | 4.2% of rounds  |
+| us + 3 `rule_based`, 200 rounds | 2.56      | 3.58 (mean of 3) | **-1.02** +/- 0.40 | **42.50%**  | 74.5% of rounds | 11.5% of rounds |
 
 Neither passes. The suicide rate completes a pattern that has held all day: the
 better the opponent, the more the agent kills itself.
 
-| opponent | our suicide rate |
-|---|---|
-| nobody (solo `classic`) | 0.60% |
-| `peaceful_agent` | 3.50% |
-| `coin_collector_agent` | 13.25% |
-| `rule_based_agent` | **38.25%** |
+| opponent                | our suicide rate |
+| ----------------------- | ---------------- |
+| nobody (solo `classic`) | 0.60%            |
+| `peaceful_agent`        | 3.50%            |
+| `coin_collector_agent`  | 13.25%           |
+| `rule_based_agent`      | **38.25%**       |
 
 ### Where the margin actually comes from
 
 Score is `coins + 5 x kills`, so the margin splits cleanly:
 
-| | margin from coins | margin from kills | total |
-|---|---|---|---|
-| 1v1 | **-1.19** | -0.66 | -1.85 |
-| tournament shape | -0.35 | **-0.67** | -1.02 |
+|                  | margin from coins | margin from kills | total |
+| ---------------- | ----------------- | ----------------- | ----- |
+| 1v1              | **-1.19**         | -0.66             | -1.85 |
+| tournament shape | -0.35             | **-0.67**         | -1.02 |
 
 Two different problems wearing the same number. One against one we are simply
 out-collected, which is the task-2 gate we never passed showing through: solo we
@@ -1185,10 +1385,10 @@ we do not kill them**. Every death we hand over is worth 5 points to somebody.
 
 Splitting the rounds the same way as this morning:
 
-| | 1v1 margin | tournament margin |
-|---|---|---|
-| rounds we survived | -1.49 | -1.03 |
-| rounds we self-killed | -2.42 | -1.01 |
+|                                                     | 1v1 margin             | tournament margin      |
+| --------------------------------------------------- | ---------------------- | ---------------------- |
+| rounds we survived                                  | -1.49                  | -1.03                  |
+| rounds we self-killed                               | -2.42                  | -1.01                  |
 | **if the self-kill rounds went like the survivors** | **-1.49, still fails** | **-1.03, still fails** |
 
 Against `coin_collector` the whole deficit was suicides. Against
@@ -1209,7 +1409,7 @@ that. Training does, or nothing does.
 
 ### The prediction for the next run, written down before it is spent
 
-Applying this morning's lesson: price the reward *stream*, not the reward table.
+Applying this morning's lesson: price the reward _stream_, not the reward table.
 In the tournament shape the agent takes roughly 1.2 deaths per round and scores
 0.115 kills, so the opponent-related signal runs about **10 to 1 toward
 avoidance**. That is the same shape that made the task-3 run go backwards.
@@ -1279,12 +1479,12 @@ that a null result would be interpretable. 19.7 minutes on the M3 Max.
 
 ### The training itself worked
 
-| rounds | steps | coins | crates | suicidal bombs | reward | epsilon |
-|---|---|---|---|---|---|---|
-| 1-1000 | 29 | 0.41 | 14.0 | 0.016 | +2.72 | 0.269 -> |
-| 1001-2000 | 79 | 1.24 | 31.2 | 0.015 | +20.75 | |
-| 2001-3000 | 146 | 2.28 | 48.0 | 0.048 | +40.97 | 0.050 |
-| 3001-4000 | 144 | 2.20 | 47.6 | 0.033 | +40.66 | 0.050 |
+| rounds    | steps | coins | crates | suicidal bombs | reward | epsilon  |
+| --------- | ----- | ----- | ------ | -------------- | ------ | -------- |
+| 1-1000    | 29    | 0.41  | 14.0   | 0.016          | +2.72  | 0.269 -> |
+| 1001-2000 | 79    | 1.24  | 31.2   | 0.015          | +20.75 |          |
+| 2001-3000 | 146   | 2.28  | 48.0   | 0.048          | +40.97 | 0.050    |
+| 3001-4000 | 144   | 2.20  | 47.6   | 0.033          | +40.66 | 0.050    |
 
 Learning curve rose and flattened by round 2500, same shape as every previous
 run. Epsilon annealed cleanly, the buffer filled and stayed at 50000, suicidal
@@ -1296,11 +1496,11 @@ Two checkpoints shortlisted from the curve and confirmed properly, 400 rounds
 against the coin collector and 300 against the peaceful agent, against the r3750
 baseline measured the same way:
 
-| model | suicide vs cc | margin vs cc | coins vs cc | suicide vs pf | kill-in-round vs pf |
-|---|---|---|---|---|---|
-| **r3750** | 13.25% [10.3, 16.9] | **+0.17** +/- 0.47 | **4.80** | 3.50% | **69.2%** |
-| task-3 r2500 | **9.25%** [6.8, 12.5] | -0.23 +/- 0.38 | 4.12 | 2.33% | 56.3% [50.7, 61.8] |
-| task-3 r3250 | 11.75% [9.0, 15.3] | -0.29 +/- 0.42 | 4.10 | 3.00% | 47.7% [42.1, 53.3] |
+| model        | suicide vs cc         | margin vs cc       | coins vs cc | suicide vs pf | kill-in-round vs pf |
+| ------------ | --------------------- | ------------------ | ----------- | ------------- | ------------------- |
+| **r3750**    | 13.25% [10.3, 16.9]   | **+0.17** +/- 0.47 | **4.80**    | 3.50%         | **69.2%**           |
+| task-3 r2500 | **9.25%** [6.8, 12.5] | -0.23 +/- 0.38     | 4.12        | 2.33%         | 56.3% [50.7, 61.8]  |
+| task-3 r3250 | 11.75% [9.0, 15.3]    | -0.29 +/- 0.42     | 4.10        | 3.00%         | 47.7% [42.1, 53.3]  |
 
 Survival improved, and that part is real: 13.25% to 9.25%. Everything the gates
 actually measure got worse. The kill rate against the peaceful agent fell from
@@ -1314,11 +1514,11 @@ build if you were told deaths are expensive and told almost nothing else.
 
 Across the whole run:
 
-| | count |
-|---|---|
-| kills scored | **81** |
-| rounds ending early, essentially always our death | **3736 of 4000** |
-| reward from kills, as a share of total reward | **0.31% to 0.52%**, every block |
+|                                                   | count                           |
+| ------------------------------------------------- | ------------------------------- |
+| kills scored                                      | **81**                          |
+| rounds ending early, essentially always our death | **3736 of 4000**                |
+| reward from kills, as a share of total reward     | **0.31% to 0.52%**, every block |
 
 One kill per 49 rounds. 46 deaths for every kill. `KILLED_OPPONENT` is +5.0 and
 `GOT_KILLED` and `KILLED_SELF` are -5.0 each, so the net opponent-related signal
@@ -1345,8 +1545,8 @@ into blasts we are setting off anyway. If the kill behaviour is to be trained in
 at all, it has to be trained where kills happen.
 
 The pricing habit that has worked all project is to do the arithmetic before
-spending the run. Here I priced the reward *table* (it already had
-`KILLED_OPPONENT`) and never priced the reward *stream*. Those are different
+spending the run. Here I priced the reward _table_ (it already had
+`KILLED_OPPONENT`) and never priced the reward _stream_. Those are different
 questions and only the second one predicts what gets learned.
 
 ### The open question this leaves
@@ -1377,9 +1577,9 @@ Three options, and this is a decision, not a finding:
 **Symptom.** `DQN_MODEL_FILE=models/task2-classic-r3750-ego13.pt python
 tools/evaluate.py --agents dqn_agent --scenario classic --n-rounds 30` reported
 **0.00 coins, 400.0 steps, 0 bombs**. The identical command with the identical
-file given as an *absolute* path reported **7.72 coins**.
+file given as an _absolute_ path reported **7.72 coins**.
 
-**Cause.** `agents.py`, `SequentialAgentBackend.send_event`, wraps *every*
+**Cause.** `agents.py`, `SequentialAgentBackend.send_event`, wraps _every_
 agent callback in an `os.chdir` into `agent_code/<agent>/`. So while our code
 runs, including the import of `callbacks.py` where `MODEL_FILE` is built, the
 working directory is the agent's own folder, not the repo root.
@@ -1442,18 +1642,17 @@ testing before anything was built on it.
 Live, against `peaceful_agent` on `classic`, with the weights actually loaded:
 the opponent is inside the 13x13 window on **37%** of steps, and over 30 rounds
 **28 of 30** bring the two agents within 6 tiles of each other, median closest
-approach 2 tiles. Against `coin_collector_agent` it is 48% of steps and 30 of
-30. So the agent can see what it needs to see, and no view change is justified.
+approach 2 tiles. Against `coin_collector_agent` it is 48% of steps and 30 of 30. So the agent can see what it needs to see, and no view change is justified.
 
 ### The task-3 baseline: same weights, three boards
 
 `tools/evaluate3.py`, 200 rounds each, training off, `models/task2-classic-r3750-ego13.pt`.
 
-| | our score | their score | margin | kills in >=1 round | our suicide |
-|---|---|---|---|---|---|
-| solo `classic` (1000 rounds, 09.09) | 7.51 coins | | | | **0.60%** |
-| vs `peaceful_agent` | 11.40 | 0.15 | **+11.24** +/- 0.52 | **74.5%** [68.0, 80.0] | **6.00%** |
-| vs `coin_collector_agent` | 4.40 | 4.94 | **-0.54** +/- 0.66 | 8.0% | **21.50%** |
+|                                     | our score  | their score | margin              | kills in >=1 round     | our suicide |
+| ----------------------------------- | ---------- | ----------- | ------------------- | ---------------------- | ----------- |
+| solo `classic` (1000 rounds, 09.09) | 7.51 coins |             |                     |                        | **0.60%**   |
+| vs `peaceful_agent`                 | 11.40      | 0.15        | **+11.24** +/- 0.52 | **74.5%** [68.0, 80.0] | **6.00%**   |
+| vs `coin_collector_agent`           | 4.40       | 4.94        | **-0.54** +/- 0.66  | 8.0%                   | **21.50%**  |
 
 Neither gate passes. The kill rate against the peaceful agent is 5.5 points
 short of 80, and the score margin against the coin collector is a statistical
@@ -1474,10 +1673,10 @@ collecting them, plus the rounds we end early by dying.
 
 Splitting the 200 `coin_collector` rounds by whether we killed ourselves:
 
-| | rounds | our score | their score | margin | killed them | mean death step |
-|---|---|---|---|---|---|---|
-| we survived | 157 | 5.10 +/- 0.43 | 4.26 +/- 0.31 | **+0.83** | 13.4% | |
-| we suicided | 43 | 2.51 +/- 0.58 | 6.60 +/- 0.58 | **-4.09** | 0.0% | 122 |
+|             | rounds | our score     | their score   | margin    | killed them | mean death step |
+| ----------- | ------ | ------------- | ------------- | --------- | ----------- | --------------- |
+| we survived | 157    | 5.10 +/- 0.43 | 4.26 +/- 0.31 | **+0.83** | 13.4%       |                 |
+| we suicided | 43     | 2.51 +/- 0.58 | 6.60 +/- 0.58 | **-4.09** | 0.0%        | 122             |
 
 **The whole margin deficit is the suicides.** In the rounds we survive we are
 already ahead by +0.83. Suicide costs about 4.9 score in the round it happens,
@@ -1498,18 +1697,18 @@ gate number by about a point. That half is genuinely a hunting problem.
 
 Rather than guess at a fix, every bomb the agent drops in 120 real rounds was
 replayed through four candidate survivability checks, then split by whether that
-bomb is the one that killed us. `recall` is the share of *fatal* bombs a
-candidate would have blocked, `cost` the share of *survived* bombs it would also
+bomb is the one that killed us. `recall` is the share of _fatal_ bombs a
+candidate would have blocked, `cost` the share of _survived_ bombs it would also
 have blocked. Blocking bombs is not free; the agent needs them for crates.
 
 vs `coin_collector_agent`, 17 fatal bombs and 5438 survived bombs:
 
-| candidate | blocks fatal | blocks survived |
-|---|---|---|
-| the live check (opponents are walls) | 0 of 17, 0% | 0.00% |
-| opponents may **move** | 4 of 17, **23.5%** | **0.39%** |
-| opponents may **bomb** where they stand | 0 of 17, 0% | 0.06% |
-| both | 4 of 17, 23.5% | 0.39% |
+| candidate                               | blocks fatal       | blocks survived |
+| --------------------------------------- | ------------------ | --------------- |
+| the live check (opponents are walls)    | 0 of 17, 0%        | 0.00%           |
+| opponents may **move**                  | 4 of 17, **23.5%** | **0.39%**       |
+| opponents may **bomb** where they stand | 0 of 17, 0%        | 0.06%           |
+| both                                    | 4 of 17, 23.5%     | 0.39%           |
 
 Two conclusions, ten minutes, no training run. "Opponents may move" is worth
 having and nearly free. "Opponents may drop a bomb" is worth nothing and was
@@ -1526,12 +1725,12 @@ a nonzero input, and lighting it up injects an untrained perturbation.
 Control: play the same games with channel 3 forced back to zero, so the game is
 identical and only what the network is shown differs. 200 rounds each.
 
-| | suicide | margin | kill-in-round |
-|---|---|---|---|
-| vs `coin_collector`, sees opponents | 21.00% | -0.91 | 6.0% |
-| vs `coin_collector`, channel 3 zeroed | 22.50% | -0.71 | 10.0% |
-| vs `peaceful`, sees opponents | 3.00% | +11.04 | 71.5% |
-| vs `peaceful`, channel 3 zeroed | 2.50% | +10.54 | 64.5% |
+|                                       | suicide | margin | kill-in-round |
+| ------------------------------------- | ------- | ------ | ------------- |
+| vs `coin_collector`, sees opponents   | 21.00%  | -0.91  | 6.0%          |
+| vs `coin_collector`, channel 3 zeroed | 22.50%  | -0.71  | 10.0%         |
+| vs `peaceful`, sees opponents         | 3.00%   | +11.04 | 71.5%         |
+| vs `peaceful`, channel 3 zeroed       | 2.50%   | +10.54 | 64.5%         |
 
 **No difference anywhere.** Blinding the agent to opponents entirely changes
 nothing measurable, which kills the untrained-channel story and also says
@@ -1615,12 +1814,12 @@ the peaceful matchup. Training against a random walker teaches very little.
 
 Baselines this run has to beat, all frozen, mask on:
 
-| | value |
-|---|---|
-| vs `coin_collector`: suicide | 13.25% |
-| vs `coin_collector`: score margin | +0.17 +/- 0.47 |
-| vs `peaceful`: kill-in-round | 69.2% |
-| solo `classic`: coins (must not collapse) | 7.51 |
+|                                           | value          |
+| ----------------------------------------- | -------------- |
+| vs `coin_collector`: suicide              | 13.25%         |
+| vs `coin_collector`: score margin         | +0.17 +/- 0.47 |
+| vs `peaceful`: kill-in-round              | 69.2%          |
+| solo `classic`: coins (must not collapse) | 7.51           |
 
 That last row matters. Nothing in this run protects task 2, so the winning
 checkpoint has to be re-measured solo as well before it can ship.
@@ -1664,19 +1863,18 @@ confidence interval, kill-in-round as a Wilson interval, and `--gate 3`.
   task-2 gate we already decided to advance past, and task 3 has two gates that
   need the remaining days.
 
-
 ## 2026-09-09 (night, 7) — Daniela's symmetry suggestion, implemented
 
 The board is square and every rule of the game is invariant under the eight
 symmetries of a square, so one observed transition is really eight. Rotating a
 board 90 degrees does not change which move is correct, it changes what that
-move is *called*, and until now the network had to learn each orientation from
+move is _called_, and until now the network had to learn each orientation from
 separate experience.
 
 ### Design choices
 
 **Applied at sampling time, not at push time.** Pushing eight copies of every
-transition would cut the number of *distinct* situations a 50,000-entry buffer
+transition would cut the number of _distinct_ situations a 50,000-entry buffer
 holds by a factor of eight. Transforming the batch as it is drawn keeps the
 buffer's diversity, costs no memory, and replays each transition in a different
 orientation on every visit, which also regularises.
@@ -1702,14 +1900,14 @@ wrong**. Given how much of this project has been lost to silent errors of
 exactly that shape, it gets a real test suite: `tools/test_augment.py`, 71
 checks, all passing.
 
-The strongest of them is check 3: transform the *world* (rotate the arena, move
+The strongest of them is check 3: transform the _world_ (rotate the arena, move
 the agent and the coins accordingly), compute features from that, and compare
 against transforming the features of the original. They agree exactly for all
 eight elements. That validates the board transform independently of the algebra.
 Check 2 then pins the action permutation by placing a coin one tile in each
 direction and confirming it lands where the permuted action points.
 
-`next_legal` moves by the *inverse* permutation, since it is a mask indexed by
+`next_legal` moves by the _inverse_ permutation, since it is a mask indexed by
 action rather than an action.
 
 Cost: 2.51 ms per sampled batch of 128 against 0.53 ms, so about 70 seconds
@@ -1723,7 +1921,6 @@ therefore differs from `2026-09-09-task2-classic-4000r` in one flag and nothing
 else, which is the standard the plan sets for every comparison.
 
 Baseline to beat: **7.51 coins over 1000 rounds, 0.60% suicide**, from r3750.
-
 
 ## 2026-09-09 (night, 6) — Submission dry run passes, 8 days early
 
@@ -1753,7 +1950,6 @@ Everything that was flagged as a submission risk holds:
 
 Only 20 rounds; this is a crash-and-configuration check, not a performance
 measurement.
-
 
 ## 2026-09-09 (night, 5) — `classic`: 7.76 coins, and a curve that lied again
 
@@ -1797,14 +1993,14 @@ round rather than the ~1.9 a from-scratch run starts at.
 
 ### Confirmed over 300 frozen rounds each, on `classic`
 
-| checkpoint | coins | 95% CI | steps | suicide | 95% upper | reach 8+ |
-|---|---|---|---|---|---|---|
-| r2250 | 6.28 | [5.99, 6.57] | 395.5 | 0.67% | 2.40% | 39.0% |
-| r2750 | 7.28 | [7.02, 7.55] | 392.9 | 1.33% | 3.38% | 65.7% |
-| r3000 | 7.74 | [7.52, 7.96] | 372.5 | 3.00% | 5.60% | 72.7% |
-| **r3750** | **7.76** | [7.53, 7.98] | 395.8 | **0.67%** | 2.40% | **75.0%** |
-| r4000 | 6.34 | [6.09, 6.60] | 398.7 | **0.33%** | **1.86%** | 35.3% |
-| `rule_based_agent` | **8.60** | +/- 0.09 | | 0.00% | | **93.0%** |
+| checkpoint         | coins    | 95% CI       | steps | suicide   | 95% upper | reach 8+  |
+| ------------------ | -------- | ------------ | ----- | --------- | --------- | --------- |
+| r2250              | 6.28     | [5.99, 6.57] | 395.5 | 0.67%     | 2.40%     | 39.0%     |
+| r2750              | 7.28     | [7.02, 7.55] | 392.9 | 1.33%     | 3.38%     | 65.7%     |
+| r3000              | 7.74     | [7.52, 7.96] | 372.5 | 3.00%     | 5.60%     | 72.7%     |
+| **r3750**          | **7.76** | [7.53, 7.98] | 395.8 | **0.67%** | 2.40%     | **75.0%** |
+| r4000              | 6.34     | [6.09, 6.60] | 398.7 | **0.33%** | **1.86%** | 35.3%     |
+| `rule_based_agent` | **8.60** | +/- 0.09     |       | 0.00%     |           | **93.0%** |
 
 **The agent is better on the harder board.** 7.76 on `classic` against
 7.02-7.48 on `crate-light`. More crates means more coins per bomb and the coin
@@ -1816,7 +2012,7 @@ the opposite.
 
 The 0.00% suicide rate claimed for `crate-light` r5750 was partly luck, as
 suspected. Over 1000 rounds it is **1.20%, 95% upper bound 2.09%**, with 6.91
-coins. So that checkpoint does *not* cleanly pass the 2% gate; it sits on the
+coins. So that checkpoint does _not_ cleanly pass the 2% gate; it sits on the
 boundary. r5000 over 1000 rounds: 7.30 coins, 4.90% suicide. Recording this
 because the 300-round number is already written down above and should not be
 the one that survives into the report.
@@ -1836,7 +2032,6 @@ claim in the report. **Gate 2 coins: 7.51 of 9 against a target of 8, short by
 0.49 coins. `classic` has converged, so the next lever is not more rounds: it
 is the symmetry augmentation, which buys sample efficiency, which is exactly
 what a converged-but-short agent needs.
-
 
 ## 2026-09-09 (night, 4) — 6000 rounds: the suicide half of gate 2 passes
 
@@ -1864,15 +2059,15 @@ plateaued rather than being cut off mid-climb, so "train longer on
 `eval_curve.csv` oscillates between 5.78 and 7.72 after round 4000, which is
 40-round noise (+/- 0.85), not signal. Confirmed the candidates over 300 rounds:
 
-| checkpoint | coins | 95% CI | steps | suicide | reach 8+ |
-|---|---|---|---|---|---|
-| r4250 | 6.32 | [6.03, 6.61] | 386.7 | 3.67% | 42.7% |
-| **r5000** | **7.48** | [7.20, 7.76] | 346.0 | 4.67% | **71.7%** |
-| r5250 | 6.63 | [6.33, 6.94] | 382.4 | 4.00% | 52.0% |
-| **r5750** | 7.02 | [6.78, 7.27] | **399.0** | **0.00%** | 54.3% |
-| r6000 | 5.56 | [5.21, 5.91] | 382.2 | 1.00% | 35.3% |
-| run 1 r3000 (previous best) | 6.92 | [6.64, 7.19] | 371.5 | 7.33% | 55.7% |
-| `rule_based_agent` | **8.99** | +/- 0.01 | 340.7 | 0.00% | **100.0%** |
+| checkpoint                  | coins    | 95% CI       | steps     | suicide   | reach 8+   |
+| --------------------------- | -------- | ------------ | --------- | --------- | ---------- |
+| r4250                       | 6.32     | [6.03, 6.61] | 386.7     | 3.67%     | 42.7%      |
+| **r5000**                   | **7.48** | [7.20, 7.76] | 346.0     | 4.67%     | **71.7%**  |
+| r5250                       | 6.63     | [6.33, 6.94] | 382.4     | 4.00%     | 52.0%      |
+| **r5750**                   | 7.02     | [6.78, 7.27] | **399.0** | **0.00%** | 54.3%      |
+| r6000                       | 5.56     | [5.21, 5.91] | 382.2     | 1.00%     | 35.3%      |
+| run 1 r3000 (previous best) | 6.92     | [6.64, 7.19] | 371.5     | 7.33%     | 55.7%      |
+| `rule_based_agent`          | **8.99** | +/- 0.01     | 340.7     | 0.00%     | **100.0%** |
 
 **Gate 2, suicide rate below 2%: passed** by `r5750` (0 of 300) and `r6000`
 (1.00%). **Gate 2, 8 of 9 coins: not passed**, best is 7.48.
@@ -1891,7 +2086,7 @@ most coins and reaches 8+ in 71.7% of rounds while dying 4.67% of the time;
 ### Honest caveat on the pass
 
 The safety metric swings hard between adjacent checkpoints (4.67%, then 0.00%,
-then 1.00%, at 250-round spacing). The candidates were selected on *coins* from
+then 1.00%, at 250-round spacing). The candidates were selected on _coins_ from
 the 40-round curve and the suicide rate was then measured fresh, so it is not
 circular, but 0 of 300 from a checkpoint whose neighbours sit at 1-5% is partly
 luck. Re-confirming over 1000 rounds before putting "passes gate 2 on survival"
@@ -1905,7 +2100,6 @@ right call, but that reason has now expired: the run converges, the bugs are
 gone, and the remaining problem is sample efficiency, which is exactly what
 augmentation buys.
 
-
 ## 2026-09-09 (night, 3) — Training with the shield on makes the agent worse
 
 Retrained 3000 rounds on `crate-light`, identical to the previous run except
@@ -1915,16 +2109,16 @@ exactly as designed: `suicidal_bombs` is **0 across all 3000 rounds** (it was
 
 It did not help. Both runs evaluated masked, 300 frozen rounds each:
 
-| checkpoint | trained *unmasked* (run 1) | trained *masked* (run 3) |
-|---|---|---|
-| r2500 | 4.03 coins, **7.67%** suicide | 3.99 coins, **24.33%** |
-| r2750 | 5.88 coins, **9.00%** | 5.96 coins, **21.00%** |
-| r3000 | 6.94 coins, **5.67%** | 6.55 coins, **11.33%** |
+| checkpoint | trained _unmasked_ (run 1)    | trained _masked_ (run 3) |
+| ---------- | ----------------------------- | ------------------------ |
+| r2500      | 4.03 coins, **7.67%** suicide | 3.99 coins, **24.33%**   |
+| r2750      | 5.88 coins, **9.00%**         | 5.96 coins, **21.00%**   |
+| r3000      | 6.94 coins, **5.67%**         | 6.55 coins, **11.33%**   |
 
 Coin collection is statistically identical at every checkpoint. The suicide rate
 is two to three times worse for the shielded agent, at every checkpoint.
 
-**Why.** The mask only blocks bombs with *no* escape. It does nothing about a
+**Why.** The mask only blocks bombs with _no_ escape. It does nothing about a
 bomb whose escape exists but is a precise four-move sequence. Run 1 learned
 caution about those the hard way, by dying, and that caution transfers. Run 3
 never saw a single suicidal bomb, so it learned nothing about bomb safety at
@@ -1952,7 +2146,6 @@ last 750 rounds and neither levelled off. Every diagnosis so far has been a
 reward or masking bug, so it is worth stating plainly that the next step is not
 another bug hunt: it is 6000 rounds instead of 3000.
 
-
 ## 2026-09-09 (night, 2) — Masking unescapable bombs, measured before retraining
 
 `choice_mask` now removes `BOMB` when `escape_exists` is false, alongside the
@@ -1964,10 +2157,10 @@ one BFS bounded by `BOMB_TIMER`; measured decision time went from 1.00 to
 
 Same weights, same 300 frozen rounds on `crate-light`, only the mask changed:
 
-| r3000 | coins | steps | suicide | reach 8+ | invalid | ms/step |
-|---|---|---|---|---|---|---|
-| mask off (as trained) | 6.49 +/-0.34 | 340.5 | 15.67% | 51.3% | 0.00 | 1.00 |
-| **mask on** | **7.05 +/-0.24** | **382.2** | **4.33%** | 53.7% | 0.00 | 1.01 |
+| r3000                 | coins            | steps     | suicide   | reach 8+ | invalid | ms/step |
+| --------------------- | ---------------- | --------- | --------- | -------- | ------- | ------- |
+| mask off (as trained) | 6.49 +/-0.34     | 340.5     | 15.67%    | 51.3%    | 0.00    | 1.00    |
+| **mask on**           | **7.05 +/-0.24** | **382.2** | **4.33%** | 53.7%    | 0.00    | 1.01    |
 
 A third of the remaining gap to the gate closed without a single training step.
 That is worth remembering as a method: the policy was not wrong about where to
@@ -1982,7 +2175,7 @@ more: the fatal opening bomb goes from 9.30% of boards to **0.00%**, while the
 
 Residual deaths over 600 rounds: **6.17%**, at steps
 `[6 x7, 12, 12, 19, 20, 21, 28, 30, ..., 155, 225]`. Seven are still the first
-bomb, but these are cases where an escape *existed* at drop time and the agent
+bomb, but these are cases where an escape _existed_ at drop time and the agent
 failed to walk it. The rest are spread evenly through the round. So the mask
 removed the provably impossible class and what remains is a real learning
 problem, which is the right kind of problem to have.
@@ -2002,20 +2195,19 @@ is that it does not learn it on its own (42% error rate on the fatal openings
 after a full run), because the state is uncommon, the punishment lands four
 steps late, and the same action is correct on the other 78% of boards.
 
-
 ## 2026-09-09 (night) — The reward fixes worked; the deaths are the opening move
 
 **Result.** Same command, same 3000 rounds on `crate-light`, only the reward
 function changed. Frozen evaluation went from 0.0 coins to 6.62 at the last
 checkpoint, and every intermediate number moved with it.
 
-| | before the fixes | after |
-|---|---|---|
-| frozen coins @ 3000 | 0.00 | **6.62** |
-| crates / round (last 300, training) | 1.33 | **29.65** |
-| good bombs / round | 0.62 | **13.11** |
-| mean reward / round | not logged | +31.6 |
-| invalid actions, all 3000 rounds | 0 | **0** |
+|                                     | before the fixes | after     |
+| ----------------------------------- | ---------------- | --------- |
+| frozen coins @ 3000                 | 0.00             | **6.62**  |
+| crates / round (last 300, training) | 1.33             | **29.65** |
+| good bombs / round                  | 0.62             | **13.11** |
+| mean reward / round                 | not logged       | +31.6     |
+| invalid actions, all 3000 rounds    | 0                | **0**     |
 
 Training-time progression of the new run:
 
@@ -2080,7 +2272,7 @@ agent picks BOMB as its first action   48.1%
 
 The start corner is cleared of crates by `build_arena`, but the corridor out of
 it is not, and with 35% density there is often no tile at distance 4 reachable
-in the 4 steps the timer allows. The agent has learned this *partially*: of the
+in the 4 steps the timer allows. The agent has learned this _partially_: of the
 22% of boards where the opening bomb is fatal it correctly declines on 58% of
 them. On the other 42% it dies.
 
@@ -2110,17 +2302,16 @@ round counter restarting at line 3002. Archived correctly as
 `experiments/runs/2026-09-09-task2-crate-light-3000r-fixed.csv`; the rotation
 rule should probably also trigger when round 1 reappears.
 
-
 ## 2026-09-09 (evening) — Four reward fixes, with the arithmetic
 
 The agent was behaving correctly under a reward function that asked for
 nothing. Expected value of a five-step window, gamma 0.95, assuming a bomb
 breaks two crates and 5% of bombs kill it:
 
-| | bomb 2 crates | do nothing | margin |
-|---|---|---|---|
-| before | -0.75 | -0.32 | **-0.44** |
-| after | +2.35 | -0.32 | **+2.67** |
+|        | bomb 2 crates | do nothing | margin    |
+| ------ | ------------- | ---------- | --------- |
+| before | -0.75         | -0.32      | **-0.44** |
+| after  | +2.35         | -0.32      | **+2.67** |
 
 Still positive if 30% of bombs kill it (+1.42). That is the check that was
 missing before the first 3000-round run: the reward design was never priced
@@ -2167,7 +2358,6 @@ training run. The 3000-round run that produced 0.0 cost about 45 minutes and
 told us less than ten minutes of algebra. Worth pricing a reward change against
 the do-nothing baseline before spending a run on it.
 
-
 ## 2026-09-09 — Task 2 trains to a score of zero, and why
 
 **Result.** 3000 rounds on `crate-light`. Frozen evaluation: **0.0 coins at all
@@ -2196,14 +2386,14 @@ agent actively chose to bomb less. It learned to survive by doing nothing.
 ### Root cause: the shaping is inert on a crate board
 
 `_potential` is `-scale * BFS distance to the nearest coin`, and
-`game_state["coins"]` lists only *collectable* coins. Measured across the three
+`game_state["coins"]` lists only _collectable_ coins. Measured across the three
 scenarios at step 1:
 
-| scenario | coins | crates | visible at step 1 |
-|---|---|---|---|
-| `coin-heaven` | 50 | 0 | **50** |
-| `crate-light` | 9 | 56 | **0** |
-| `classic` | 9 | 119 | **0** |
+| scenario      | coins | crates | visible at step 1 |
+| ------------- | ----- | ------ | ----------------- |
+| `coin-heaven` | 50    | 0      | **50**            |
+| `crate-light` | 9     | 56     | **0**             |
+| `classic`     | 9     | 119    | **0**             |
 
 Every coin starts inside a crate. So on any task-2 board the potential is 0 at
 every step and the shaping term contributes exactly nothing. The whole dense
@@ -2237,7 +2427,6 @@ hide a coin. Reaching the gate's 8 of 9 coins means destroying most of the
 crates on the board. At the observed peak of 3.2 crates per round the agent
 would find about 0.5 coins. The gate is not close, and the target behaviour is
 "bomb constantly and survive", not "bomb occasionally".
-
 
 ## 2026-09-08 — Task 2 groundwork, and two things measured rather than assumed
 
@@ -2286,10 +2475,10 @@ farmable positive, which is the trap that bit us on 2026-09-05.
 
 Verified the classifier discriminates rather than labelling everything:
 
-| scenario | good | useless | suicidal | crates/round |
-|---|---|---|---|---|
-| `empty` (open board) | 0 | 2 | 0 | 0.0 |
-| `loot-crate` (75% crates) | 1 | 0 | 5 | 3.2 |
+| scenario                  | good | useless | suicidal | crates/round |
+| ------------------------- | ---- | ------- | -------- | ------------ |
+| `empty` (open board)      | 0    | 2       | 0        | 0.0          |
+| `loot-crate` (75% crates) | 1    | 0       | 5        | 3.2          |
 
 Open board: every bomb escapable and pointless. Cramped board: most bombs are
 genuine suicide. `training_log.csv` now has `crates`, `good_bombs`,
@@ -2322,10 +2511,10 @@ in a new costume.
 
 Measured effect, 8 rounds from scratch:
 
-| scenario | mean steps | crates/round | suicidal bombs/round |
-|---|---|---|---|
-| `crate-light` | 42 | 1.6 | 0.0 |
-| `loot-crate` | 26 | 3.5 | 0.4 |
+| scenario      | mean steps | crates/round | suicidal bombs/round |
+| ------------- | ---------- | ------------ | -------------------- |
+| `crate-light` | 42         | 1.6          | 0.0                  |
+| `loot-crate`  | 26         | 3.5          | 0.4                  |
 
 Against 3-5 steps before. Note `settings.py` changes do not ship with the agent,
 so the tournament is unaffected; the spec explicitly permits custom scenarios.
@@ -2357,7 +2546,6 @@ check" that runs with an empty environment exactly as the tournament will.
 Nothing is trained on task 2 yet. The `danger` channel is now correct but the
 network has never seen it nonzero during training.
 
-
 ## 2026-09-06 (confirmed) — Gate 1 passed
 
 Re-measured the top checkpoint of each configuration over 200 fresh rounds
@@ -2381,7 +2569,6 @@ my own criterion, not the project spec's. It ranked the weaker agent first. That
 is a fair illustration of why the metric definition deserves as much scrutiny as
 the result.
 
-
 ## 2026-09-06 — It learns. And two of my conclusions were wrong.
 
 **Result.** Re-ran the six-config sweep with the cache fix. Best frozen scores
@@ -2391,14 +2578,14 @@ for the first time, i.e. the board actually gets cleared.
 Six checkpoints provisionally meet gate 1 (>= 45 coins, 0 invalid actions) on 40
 evaluation rounds:
 
-| config | rounds | coins | steps |
-|---|---|---|---|
-| baseline | 250 | 47.35 +/- 1.27 | 333 |
-| lr_2e4 | 250 | 47.00 +/- 0.72 | 367 |
-| global_view | 2250 | 46.35 +/- 2.12 | 280 |
-| old_shaping | 250 | 45.52 +/- 2.16 | 342 |
-| lr_2e4 | 500 | 45.48 +/- 1.76 | 335 |
-| old_shaping | 500 | 45.12 +/- 1.99 | 373 |
+| config      | rounds | coins          | steps |
+| ----------- | ------ | -------------- | ----- |
+| baseline    | 250    | 47.35 +/- 1.27 | 333   |
+| lr_2e4      | 250    | 47.00 +/- 0.72 | 367   |
+| global_view | 2250   | 46.35 +/- 2.12 | 280   |
+| old_shaping | 250    | 45.52 +/- 2.16 | 342   |
+| lr_2e4      | 500    | 45.48 +/- 1.76 | 335   |
+| old_shaping | 500    | 45.12 +/- 1.99 | 373   |
 
 Not yet a claim: 40 rounds gives +/- 2 coins, and taking the maximum of 72 noisy
 measurements biases upward. `tools/confirm.py` re-measures over 200 rounds.
@@ -2456,7 +2643,6 @@ best checkpoint rather than the last one.
 Only `global_view` is immune, which is further evidence the egocentric crop is
 the source of the problem rather than a fix for it.
 
-
 ## 2026-09-05 (evening) — Bug #4: every next_state was its own state
 
 **This is the one that mattered.** All previous results are void.
@@ -2466,7 +2652,7 @@ the source of the problem rather than a fix for it.
 everywhere. Nothing differed: not shaping on/off, not the fixed shaping vs the
 broken one, not egocentric vs global view, not learning rate, not batch size.
 
-Six variables changed and *nothing* moved. That is not six weak effects, that is
+Six variables changed and _nothing_ moved. That is not six weak effects, that is
 a common cause upstream of all of them.
 
 **Cause.** The `_encode` cache added on 2026-09-03 as a speed optimisation, keyed
@@ -2505,7 +2691,6 @@ which points upstream rather than at any of them.
 **Still unknown.** Whether the DQN learns once the data is correct. A validation
 run is in progress.
 
-
 ## 2026-09-05 — Bug #3: the reward function paid the agent to do nothing
 
 **Symptom.** 3000 rounds of clean continuous training, frozen curve flat:
@@ -2536,19 +2721,19 @@ reward design, not the network.
 
 **Fix.** Three parameters, all now separately controllable:
 
-| Parameter | Was | Now | Why |
-|---|---|---|---|
-| `DQN_SHAPING_GAMMA` | tied to gamma, 0.95 | 1.0 | Removes the per-step drift entirely. Standing still is worth exactly 0, so the step penalty makes hovering strictly negative. |
-| `DQN_SHAPING_SCALE` | 0.1 | 0.05 | Keeps collecting net positive. |
-| `DQN_SHAPING_CAP` | none | 10 | Flattens the potential past 10 tiles, bounding the jump when a coin is collected. |
+| Parameter           | Was                 | Now  | Why                                                                                                                           |
+| ------------------- | ------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `DQN_SHAPING_GAMMA` | tied to gamma, 0.95 | 1.0  | Removes the per-step drift entirely. Standing still is worth exactly 0, so the step penalty makes hovering strictly negative. |
+| `DQN_SHAPING_SCALE` | 0.1                 | 0.05 | Keeps collecting net positive.                                                                                                |
+| `DQN_SHAPING_CAP`   | none                | 10   | Flattens the potential past 10 tiles, bounding the jump when a coin is collected.                                             |
 
 Verified all three behaviours now have the right sign:
 
-| Behaviour | Before | After | Required |
-|---|---|---|---|
+| Behaviour                      | Before | After  | Required |
+| ------------------------------ | ------ | ------ | -------- |
 | Oscillate at d=10, per 2 steps | +0.065 | -0.040 | negative |
-| Step toward a coin | +0.100 | +0.030 | positive |
-| Collect a coin, worst case | -1.770 | +0.530 | positive |
+| Step toward a coin             | +0.100 | +0.030 | positive |
+| Collect a coin, worst case     | -1.770 | +0.530 | positive |
 
 Setting the shaping discount to 1.0 gives up the exact policy-invariance of
 Ng, Harada & Russell (1999), which holds for gamma_shaping = gamma. That is a
@@ -2565,19 +2750,18 @@ version can be measured against the fixed one. A shaping design that provably
 creates a hovering optimum, with the arithmetic and the measured flat curve, is
 a genuine result.
 
-
 ## 2026-09-04 — Made training cheaper, and parallel
 
 **Question asked.** Can training go faster on an M3 Max (36 GB) without hitting swap?
 
 **Measured first.** `tools/profile_step.py` breaks one round down:
 
-| Cost per 400-step round | Share |
-|---|---|
-| Gradient steps | **92%** |
-| Network forward pass (acting) | 5% |
-| `state_to_features` | 2% |
-| BFS shaping | 0.2% |
+| Cost per 400-step round       | Share   |
+| ----------------------------- | ------- |
+| Gradient steps                | **92%** |
+| Network forward pass (acting) | 5%      |
+| `state_to_features`           | 2%      |
+| BFS shaping                   | 0.2%    |
 
 So the game loop is irrelevant and the gradient step is everything. Also
 measured: a second torch thread buys under 10% on a network this small, and
@@ -2588,6 +2772,7 @@ CPU 76% idle. A single training run cannot use more than about one core because
 the game loop is serial Python.
 
 **Changes.**
+
 1. Replay buffer stores states as `uint8` instead of `float32`. Five of the six
    channels are binary and the sixth is a 0..1 danger level, so the precision
    was never used. 50,000 transitions: **406 MB -> 101 MB per process.**
@@ -2600,13 +2785,12 @@ the game loop is serial Python.
    ablations the report needs: shaping on/off, egocentric vs global view, two
    learning rates, and old-vs-new batch settings.
 
-The spec forbids multiprocessing in the *submitted agent* but explicitly allows
+The spec forbids multiprocessing in the _submitted agent_ but explicitly allows
 it for training.
 
 **What this does not do.** None of it makes the agent better. It means the whole
 ablation runs in the time one run used to take, which is how we find out what
 actually fixes the frozen-policy problem.
-
 
 ## 2026-09-04 — Bug #2: chunked training reset everything
 
@@ -2653,6 +2837,7 @@ drift during training was what kept breaking the loops, not skill.
 and cost invalid actions, so the loop was a symptom, not the cause.
 
 **Fixes applied.**
+
 1. Egocentric view (`DQN_VIEW=ego:13`): a 13x13 window recentred on the agent,
    padded with walls. The global 17x17 view forced the network to learn "walk
    toward a coin" separately for every square on the map.

@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Frozen, meeting-ready comparison of the team's Q agent and DQN.
 
-Both candidates play separately against three rule_based_agent instances with
-the same scenario and seed. Raw per-round rows and a machine-readable summary
-are preserved under experiments/runs/. Nothing trains and no live model file is
-copied or overwritten.
+By default both candidates play separately against three rule_based_agent
+instances with the same scenario and seed. `--dqn-only` evaluates just the DQN
+when a shortlisted checkpoint needs a large confirmation without paying to
+rerun an already measured Q agent. Raw per-round rows and a machine-readable
+summary are preserved under experiments/runs/. Nothing trains and no live
+model file is copied or overwritten.
 
 The default DQN is the confirmed score-profile r1250 checkpoint. The Q agent
 loads agent_code/q_agent/model.npy, matching its normal submission path.
@@ -153,13 +155,15 @@ def main():
     parser.add_argument("--seed", type=int, default=211)
     parser.add_argument("--scenario", default="classic")
     parser.add_argument("--dqn-model", type=Path, default=DEFAULT_DQN)
+    parser.add_argument("--dqn-only", action="store_true",
+                        help="evaluate only the DQN checkpoint; skip the Q agent")
     parser.add_argument("--output-dir", type=Path, default=REPO / "experiments/runs")
     args = parser.parse_args()
 
     dqn_model = args.dqn_model.resolve()
     if not dqn_model.is_file():
         raise SystemExit(f"DQN checkpoint not found: {dqn_model}")
-    if not Q_MODEL.is_file():
+    if not args.dqn_only and not Q_MODEL.is_file():
         raise SystemExit(f"Q model not found: {Q_MODEL}")
     if args.rounds < 2:
         raise SystemExit("--rounds must be at least 2 so confidence intervals are meaningful")
@@ -168,17 +172,19 @@ def main():
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     raw = {
         "dqn_agent": args.output_dir / f"{stamp}-dqn-r1250-n{args.rounds}-seed{args.seed}.json",
-        "q_agent": args.output_dir / f"{stamp}-q-agent-n{args.rounds}-seed{args.seed}.json",
     }
+    if not args.dqn_only:
+        raw["q_agent"] = args.output_dir / f"{stamp}-q-agent-n{args.rounds}-seed{args.seed}.json"
 
     rows = {
         "dqn_agent": run_frozen(
             "dqn_agent", args.rounds, args.scenario, args.seed, raw["dqn_agent"], dqn_model
         ),
-        "q_agent": run_frozen(
-            "q_agent", args.rounds, args.scenario, args.seed, raw["q_agent"]
-        ),
     }
+    if not args.dqn_only:
+        rows["q_agent"] = run_frozen(
+            "q_agent", args.rounds, args.scenario, args.seed, raw["q_agent"]
+        )
     results = {agent: summarize(agent_rows, agent) for agent, agent_rows in rows.items()}
     print_summary(results)
 
@@ -191,7 +197,8 @@ def main():
             "seed": args.seed,
             "opponents": OPPONENTS,
             "dqn_model": str(dqn_model),
-            "q_model": str(Q_MODEL),
+            "q_model": None if args.dqn_only else str(Q_MODEL),
+            "dqn_only": args.dqn_only,
         },
         "raw_files": {name: str(path) for name, path in raw.items()},
         "results": results,
