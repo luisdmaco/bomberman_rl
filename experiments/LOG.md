@@ -407,6 +407,96 @@ over the first half and the second half exploits.
 
 # Part 2 — Log
 
+## 17.09.2026 - On one board the Q agent wins (the 16.09 comparison measured a retired model)
+
+The 16.09. entry below concludes that score_hunt r1250 "decisively beats Q".
+That conclusion does not survive two checks: the Q agent it measured was three
+versions old, and the two agents had never been put on the same board.
+
+### Head to head, tournament-shaped
+
+Both team agents plus two `rule_based_agent`s, `classic`, training off. Four
+players, one board, identical opponents and identical coins - so the comparison
+is paired per round.
+
+| metric | DQN score_hunt r1250 | q_agent f00baeb | RB 0 | RB 1 |
+|---|---:|---:|---:|---:|
+| score | 3.567 +/- 0.17 | **4.448 +/- 0.19** | 2.257 | 2.304 |
+| coins | 2.407 | **2.988** | 1.787 | 1.789 |
+| kills | 0.232 | **0.292** | 0.094 | 0.103 |
+| suicide | 29.4% | **22.2%** | 39.4% | 39.0% |
+| invalid | **0.859** | 1.564 | 5.194 | 5.269 |
+
+N=1000 on seed 409. **Direct margin DQN - q_agent: -0.881 +/- 0.286**, interval
+[-1.167, -0.595]. Rounds ahead: q_agent 525 (52.5%), DQN 372 (37.2%), 103 tied.
+Both still clear gate 4, but not equally: DQN +1.286 +/- 0.207 against the mean
+rule-based opponent, q_agent +2.167 +/- 0.226.
+
+The N=200 pilot on seed 157 had read -0.870 +/- 0.607. The N=1000 confirmation
+moved the point estimate by eleven thousandths on a different seed.
+
+A 1v1 of the two alone (N=200, seed 157) gives -2.690 +/- 0.576 and 70.5% of
+rounds to the q_agent. That is a different game - more crates and coins per
+head, no third-party bombs (reported as context, not as a tournament
+claim)
+
+### Which Q model the 16.09 comparison measured
+
+The run loaded the `c0f36d7` checkpoint - the one hand-placed into the working tree for the 15.09 meeting - rather than the current `c6c0207` model. Replaying that checkpoint in the identical
+protocol - N=200, seed 157, three `rule_based_agent`s - reproduces the 16.09
+numbers exactly:
+
+| metric | 16.09 run | replay of c0f36d7 | difference |
+|---|---:|---:|---:|
+| score | 3.065 | 3.065 | 0.000 |
+| coins | 2.440 | 2.440 | 0.000 |
+| kills | 0.125 | 0.125 | 0.000 |
+| suicides | 0.615 | 0.615 | 0.000 |
+| bombs | 22.085 | 22.085 | 0.000 |
+| invalid | 1.145 | 1.145 | 0.000 |
+| margin | +0.233 | +0.233 | 0.000 |
+
+All metrics are reported to three decimal places and were tested on two machines and two operating systems. The seed fixes both the world and agent random number generators. Since the Q policy always chooses the same action using a deterministic masked argmax, the results can be reproduced exactly.
+
+The table from 16.09 is still a valid measurement. However, the row labelled “Q model.npy” uses the wrong checkpoint. Using the current checkpoint and the same seed (223) as the DQN’s own N=1000 run, the results are:
+
+| q_agent + 3 rule_based, N=1000, seed 223 | score | margin | suicide |
+|---|---:|---:|---:|
+| DQN score_hunt r1250 (16.09 run) | 4.961 +/- 0.202 | +2.250 +/- 0.238 | 10.9% |
+| q_agent f00baeb | **5.126 +/- 0.213** | **+2.482 +/- 0.250** | 25.5% |
+
+The DQN's lead in that configuration is gone too, though the intervals overlap
+there and the DQN remains the safer policy by a factor of two.
+
+### Consequence
+
+`b9ca1da` selected the DQN as the tournament agent on the strength of the 16.09
+comparison. That basis no longer holds. The q_agent is ahead or level in every configuration measured, and ahead with a separated interval in the only one shaped like the tournament. The selection should be revisited before the 21.09 code deadline.
+
+Two caveats. The tournament is played against other teams' agents, so none of
+these configurations is the tournament; and the DQN's suicide rate is half the
+q_agent's in the solo protocol, which may matter against opponents that punish
+mistakes harder than `rule_based_agent` does. Score is what is scored, though.
+
+### Repository
+
+This entry lands on `master`, which now contains both agents for the first
+time, so the comparison is reproducible with one command instead of splicing
+two branches into a scratch directory:
+
+```
+python tools/evaluate3.py --agents dqn_agent q_agent \
+    rule_based_agent rule_based_agent --scenario classic \
+    --n-rounds 1000 --seed 409
+```
+
+The merge also removed the stale `c0f36d7` copy of `agent_code/q_agent/` that
+the DQN branch carried. That copy is what the 16.09 comparison loaded, and
+leaving it in place would have set the same trap for the next reader.
+
+Raw rows for all five runs and a computed summary are under
+`experiments/runs/`, prefix `20260917-`.
+
 ## 2026-09-16 - Gate audit exposes specialization; confirmed r1250 installed
 
 The user completed the full frozen audit of score_hunt r1250 after its N=1000

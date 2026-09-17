@@ -1,0 +1,678 @@
+{
+ "generated": "2026-09-17",
+ "question": "Which of the two team agents is stronger, and does the answer depend on the evaluation configuration?",
+ "models": {
+  "dqn_agent": {
+   "file": "agent_code/dqn_agent/dqn-model.pt",
+   "sha256": "2e82ef5eae3f0114a39a82cd9e5089647ea139bce0a028536a9ae4b39eae52b0",
+   "provenance": "score-hunt r1250, selected in b9ca1da"
+  },
+  "q_agent": {
+   "file": "agent_code/q_agent/model.npy",
+   "sha256": "c2fb2a634baa3b346c56fd0fc4ce71b2bc708809d5bdcd8d23db5281c19054d3",
+   "provenance": "origin/agent_code/q_agent f00baeb (model added in c6c0207)"
+  },
+  "q_agent_superseded": {
+   "sha256_prefix": "d38f2c45b8cd4381",
+   "provenance": "c0f36d7, 2026-09-13. The model measured by the 16.09 team comparison."
+  }
+ },
+ "protocol": {
+  "training": false,
+  "scenario": "classic",
+  "note": "evaluate3.py, training off. Seeds fix the world RNG and the agent RNGs, so a run reproduces exactly across machines."
+ },
+ "configurations": [
+  {
+   "raw_file": "experiments/runs/20260917-104415-headtohead-4p-n1000-seed409.json",
+   "rounds": 1000,
+   "agents": [
+    "dqn_agent",
+    "q_agent",
+    "rule_based_agent_0",
+    "rule_based_agent_1"
+   ],
+   "note": "Both team agents plus two rule_based_agents. Tournament-shaped: four players, identical board, identical opponents. The decisive configuration.",
+   "per_agent": {
+    "dqn_agent": {
+     "score": {
+      "mean": 3.567,
+      "ci95": 0.1711961003129521
+     },
+     "coins": {
+      "mean": 2.407,
+      "ci95": 0.08483029046148421
+     },
+     "kills": {
+      "mean": 0.232,
+      "ci95": 0.028429216344140442
+     },
+     "suicides": {
+      "mean": 0.294,
+      "ci95": 0.028252009458416202
+     },
+     "bombs": {
+      "mean": 38.599,
+      "ci95": 0.9721960246723851
+     },
+     "invalid": {
+      "mean": 0.859,
+      "ci95": 0.06303017335493495
+     },
+     "margin_vs_mean_other": {
+      "mean": 0.564,
+      "ci95": 0.2109866390488887
+     },
+     "alone_first_rate": 0.272
+    },
+    "q_agent": {
+     "score": {
+      "mean": 4.448,
+      "ci95": 0.19348526988704662
+     },
+     "coins": {
+      "mean": 2.988,
+      "ci95": 0.09346816735075054
+     },
+     "kills": {
+      "mean": 0.292,
+      "ci95": 0.03178579800090843
+     },
+     "suicides": {
+      "mean": 0.222,
+      "ci95": 0.025771495019799598
+     },
+     "bombs": {
+      "mean": 37.356,
+      "ci95": 0.9812103011268469
+     },
+     "invalid": {
+      "mean": 1.564,
+      "ci95": 0.09318072039350765
+     },
+     "margin_vs_mean_other": {
+      "mean": 1.7386666666666666,
+      "ci95": 0.22754263717084758
+     },
+     "alone_first_rate": 0.389
+    },
+    "rule_based_agent_0": {
+     "score": {
+      "mean": 2.257,
+      "ci95": 0.12080263672055606
+     },
+     "coins": {
+      "mean": 1.787,
+      "ci95": 0.07404178709239692
+     },
+     "kills": {
+      "mean": 0.094,
+      "ci95": 0.019329740330932054
+     },
+     "suicides": {
+      "mean": 0.394,
+      "ci95": 0.030301055036687025
+     },
+     "bombs": {
+      "mean": 17.245,
+      "ci95": 0.47898926446787454
+     },
+     "invalid": {
+      "mean": 5.194,
+      "ci95": 0.20884549787913645
+     },
+     "margin_vs_mean_other": {
+      "mean": -1.1826666666666668,
+      "ci95": 0.16164807200494613
+     },
+     "alone_first_rate": 0.098
+    },
+    "rule_based_agent_1": {
+     "score": {
+      "mean": 2.304,
+      "ci95": 0.1258635591818773
+     },
+     "coins": {
+      "mean": 1.789,
+      "ci95": 0.07601119014610565
+     },
+     "kills": {
+      "mean": 0.103,
+      "ci95": 0.019252696744402636
+     },
+     "suicides": {
+      "mean": 0.39,
+      "ci95": 0.030246181105578793
+     },
+     "bombs": {
+      "mean": 17.428,
+      "ci95": 0.48910970041969587
+     },
+     "invalid": {
+      "mean": 5.269,
+      "ci95": 0.2108454566477281
+     },
+     "margin_vs_mean_other": {
+      "mean": -1.12,
+      "ci95": 0.16376296115185204
+     },
+     "alone_first_rate": 0.107
+    }
+   },
+   "head_to_head": {
+    "pair": "dqn_agent - q_agent",
+    "mean": -0.881,
+    "ci95": 0.28610728421429693,
+    "rounds_won": {
+     "dqn_agent": 372,
+     "tied": 103,
+     "q_agent": 525
+    }
+   }
+  },
+  {
+   "raw_file": "experiments/runs/20260917-102034-headtohead-4p-n200-seed157.json",
+   "rounds": 200,
+   "agents": [
+    "dqn_agent",
+    "q_agent",
+    "rule_based_agent_0",
+    "rule_based_agent_1"
+   ],
+   "note": "Same as above at N=200 on a different seed. Kept because it is what the N=1000 run confirms.",
+   "per_agent": {
+    "dqn_agent": {
+     "score": {
+      "mean": 3.65,
+      "ci95": 0.3936585516362904
+     },
+     "coins": {
+      "mean": 2.45,
+      "ci95": 0.18627903638623677
+     },
+     "kills": {
+      "mean": 0.24,
+      "ci95": 0.06552347540497015
+     },
+     "suicides": {
+      "mean": 0.275,
+      "ci95": 0.06203901349940938
+     },
+     "bombs": {
+      "mean": 38.475,
+      "ci95": 2.137021022181633
+     },
+     "invalid": {
+      "mean": 0.83,
+      "ci95": 0.13478681772026438
+     },
+     "margin_vs_mean_other": {
+      "mean": 0.6716666666666667,
+      "ci95": 0.46630839061027574
+     },
+     "alone_first_rate": 0.27
+    },
+    "q_agent": {
+     "score": {
+      "mean": 4.52,
+      "ci95": 0.4435147839904443
+     },
+     "coins": {
+      "mean": 3.02,
+      "ci95": 0.21966698596652637
+     },
+     "kills": {
+      "mean": 0.3,
+      "ci95": 0.07084614230427078
+     },
+     "suicides": {
+      "mean": 0.195,
+      "ci95": 0.055048409942394606
+     },
+     "bombs": {
+      "mean": 39.43,
+      "ci95": 2.071265920486028
+     },
+     "invalid": {
+      "mean": 1.755,
+      "ci95": 0.21002464512001667
+     },
+     "margin_vs_mean_other": {
+      "mean": 1.8316666666666666,
+      "ci95": 0.4971756567872592
+     },
+     "alone_first_rate": 0.375
+    },
+    "rule_based_agent_0": {
+     "score": {
+      "mean": 2.205,
+      "ci95": 0.258928801839638
+     },
+     "coins": {
+      "mean": 1.73,
+      "ci95": 0.1563993625403092
+     },
+     "kills": {
+      "mean": 0.095,
+      "ci95": 0.043043600660132325
+     },
+     "suicides": {
+      "mean": 0.405,
+      "ci95": 0.06820489232220382
+     },
+     "bombs": {
+      "mean": 16.56,
+      "ci95": 1.0130903074530306
+     },
+     "invalid": {
+      "mean": 5.335,
+      "ci95": 0.530578467098641
+     },
+     "margin_vs_mean_other": {
+      "mean": -1.255,
+      "ci95": 0.35483503739521094
+     },
+     "alone_first_rate": 0.07
+    },
+    "rule_based_agent_1": {
+     "score": {
+      "mean": 2.21,
+      "ci95": 0.26273759230848615
+     },
+     "coins": {
+      "mean": 1.785,
+      "ci95": 0.16432493303844808
+     },
+     "kills": {
+      "mean": 0.085,
+      "ci95": 0.03874802248155582
+     },
+     "suicides": {
+      "mean": 0.315,
+      "ci95": 0.06454016863035121
+     },
+     "bombs": {
+      "mean": 18.23,
+      "ci95": 1.1214426713504475
+     },
+     "invalid": {
+      "mean": 5.085,
+      "ci95": 0.4531635113733243
+     },
+     "margin_vs_mean_other": {
+      "mean": -1.2483333333333333,
+      "ci95": 0.37353546810128785
+     },
+     "alone_first_rate": 0.115
+    }
+   },
+   "head_to_head": {
+    "pair": "dqn_agent - q_agent",
+    "mean": -0.87,
+    "ci95": 0.6071105177012811,
+    "rounds_won": {
+     "dqn_agent": 75,
+     "tied": 18,
+     "q_agent": 107
+    }
+   }
+  },
+  {
+   "raw_file": "experiments/runs/20260917-102034-headtohead-1v1-n200-seed157.json",
+   "rounds": 200,
+   "agents": [
+    "dqn_agent",
+    "q_agent"
+   ],
+   "note": "The two agents alone. A different game - more crates and coins per head, no third-party bombs - so not a tournament claim.",
+   "per_agent": {
+    "dqn_agent": {
+     "score": {
+      "mean": 3.185,
+      "ci95": 0.24973699975219155
+     },
+     "coins": {
+      "mean": 3.085,
+      "ci95": 0.22863137081029136
+     },
+     "kills": {
+      "mean": 0.02,
+      "ci95": 0.019451700265428733
+     },
+     "suicides": {
+      "mean": 0.21,
+      "ci95": 0.05659169816773073
+     },
+     "bombs": {
+      "mean": 28.89,
+      "ci95": 2.2366344025012808
+     },
+     "invalid": {
+      "mean": 0.43,
+      "ci95": 0.09776333231702283
+     },
+     "margin_vs_mean_other": {
+      "mean": -2.69,
+      "ci95": 0.5759574516669206
+     },
+     "alone_first_rate": 0.255
+    },
+    "q_agent": {
+     "score": {
+      "mean": 5.875,
+      "ci95": 0.4266492504558901
+     },
+     "coins": {
+      "mean": 5.075,
+      "ci95": 0.2775121256801178
+     },
+     "kills": {
+      "mean": 0.16,
+      "ci95": 0.05093650792109702
+     },
+     "suicides": {
+      "mean": 0.06,
+      "ci95": 0.03299659187517529
+     },
+     "bombs": {
+      "mean": 35.105,
+      "ci95": 1.7471980128999138
+     },
+     "invalid": {
+      "mean": 0.405,
+      "ci95": 0.10406418487099353
+     },
+     "margin_vs_mean_other": {
+      "mean": 2.69,
+      "ci95": 0.5759574516669206
+     },
+     "alone_first_rate": 0.705
+    }
+   },
+   "head_to_head": {
+    "pair": "dqn_agent - q_agent",
+    "mean": -2.69,
+    "ci95": 0.5759574516669206,
+    "rounds_won": {
+     "dqn_agent": 51,
+     "tied": 8,
+     "q_agent": 141
+    }
+   }
+  },
+  {
+   "raw_file": "experiments/runs/20260917-104538-q-agent-vs3rb-n1000-seed223.json",
+   "rounds": 1000,
+   "agents": [
+    "q_agent",
+    "rule_based_agent_0",
+    "rule_based_agent_1",
+    "rule_based_agent_2"
+   ],
+   "note": "q_agent alone against three rule_based_agents, on the same seed 223 as the existing DQN N=1000 run, so the two numbers are paired.",
+   "per_agent": {
+    "q_agent": {
+     "score": {
+      "mean": 5.126,
+      "ci95": 0.21348699317441955
+     },
+     "coins": {
+      "mean": 3.226,
+      "ci95": 0.10247740852333093
+     },
+     "kills": {
+      "mean": 0.38,
+      "ci95": 0.034504346246667386
+     },
+     "suicides": {
+      "mean": 0.255,
+      "ci95": 0.027028475696910814
+     },
+     "bombs": {
+      "mean": 34.452,
+      "ci95": 0.987239768705918
+     },
+     "invalid": {
+      "mean": 1.806,
+      "ci95": 0.09360194691814304
+     },
+     "margin_vs_mean_other": {
+      "mean": 2.482,
+      "ci95": 0.25023074167458387
+     },
+     "alone_first_rate": 0.455
+    },
+    "rule_based_agent_0": {
+     "score": {
+      "mean": 2.556,
+      "ci95": 0.1366912449238752
+     },
+     "coins": {
+      "mean": 1.891,
+      "ci95": 0.07698239434727552
+     },
+     "kills": {
+      "mean": 0.133,
+      "ci95": 0.021775805916735284
+     },
+     "suicides": {
+      "mean": 0.51,
+      "ci95": 0.030999626075435438
+     },
+     "bombs": {
+      "mean": 18.895,
+      "ci95": 0.6254513395446029
+     },
+     "invalid": {
+      "mean": 6.635,
+      "ci95": 0.270698989992913
+     },
+     "margin_vs_mean_other": {
+      "mean": -0.9446666666666667,
+      "ci95": 0.1823588423340691
+     },
+     "alone_first_rate": 0.132
+    },
+    "rule_based_agent_1": {
+     "score": {
+      "mean": 2.699,
+      "ci95": 0.14249732027194295
+     },
+     "coins": {
+      "mean": 1.974,
+      "ci95": 0.08140607119144633
+     },
+     "kills": {
+      "mean": 0.145,
+      "ci95": 0.023034220962197424
+     },
+     "suicides": {
+      "mean": 0.558,
+      "ci95": 0.030796514135253732
+     },
+     "bombs": {
+      "mean": 18.651,
+      "ci95": 0.6221076524281063
+     },
+     "invalid": {
+      "mean": 6.566,
+      "ci95": 0.2598846567714709
+     },
+     "margin_vs_mean_other": {
+      "mean": -0.754,
+      "ci95": 0.18748242541284538
+     },
+     "alone_first_rate": 0.152
+    },
+    "rule_based_agent_2": {
+     "score": {
+      "mean": 2.677,
+      "ci95": 0.15339170619407402
+     },
+     "coins": {
+      "mean": 1.882,
+      "ci95": 0.08151823098904677
+     },
+     "kills": {
+      "mean": 0.159,
+      "ci95": 0.024937553849405356
+     },
+     "suicides": {
+      "mean": 0.515,
+      "ci95": 0.03099187209795717
+     },
+     "bombs": {
+      "mean": 18.833,
+      "ci95": 0.6256331052621816
+     },
+     "invalid": {
+      "mean": 6.358,
+      "ci95": 0.2505442491824516
+     },
+     "margin_vs_mean_other": {
+      "mean": -0.7833333333333333,
+      "ci95": 0.19233557016144234
+     },
+     "alone_first_rate": 0.139
+    }
+   }
+  },
+  {
+   "raw_file": "experiments/runs/20260917-120242-q-agent-c0f36d7-replication-n200-seed157.json",
+   "rounds": 200,
+   "agents": [
+    "q_agent",
+    "rule_based_agent_0",
+    "rule_based_agent_1",
+    "rule_based_agent_2"
+   ],
+   "note": "The superseded c0f36d7 q_agent model in the exact protocol of the 16.09 team comparison. Reproduces it to three decimals on every metric, which identifies which model that comparison measured.",
+   "per_agent": {
+    "q_agent": {
+     "score": {
+      "mean": 3.065,
+      "ci95": 0.3198889351857474
+     },
+     "coins": {
+      "mean": 2.44,
+      "ci95": 0.2204039489290461
+     },
+     "kills": {
+      "mean": 0.125,
+      "ci95": 0.04595032274972636
+     },
+     "suicides": {
+      "mean": 0.615,
+      "ci95": 0.06760790147392938
+     },
+     "bombs": {
+      "mean": 22.085,
+      "ci95": 1.5933282198848444
+     },
+     "invalid": {
+      "mean": 1.145,
+      "ci95": 0.20249030450143887
+     },
+     "margin_vs_mean_other": {
+      "mean": 0.23333333333333328,
+      "ci95": 0.40316755871722865
+     },
+     "alone_first_rate": 0.235
+    },
+    "rule_based_agent_0": {
+     "score": {
+      "mean": 2.875,
+      "ci95": 0.3383249233633907
+     },
+     "coins": {
+      "mean": 2.125,
+      "ci95": 0.20035304267353343
+     },
+     "kills": {
+      "mean": 0.15,
+      "ci95": 0.053361194565218796
+     },
+     "suicides": {
+      "mean": 0.43,
+      "ci95": 0.0687861795163993
+     },
+     "bombs": {
+      "mean": 18.86,
+      "ci95": 1.2733399295083785
+     },
+     "invalid": {
+      "mean": 6.48,
+      "ci95": 0.5552346389785205
+     },
+     "margin_vs_mean_other": {
+      "mean": -0.020000000000000035,
+      "ci95": 0.4186357534277475
+     },
+     "alone_first_rate": 0.22
+    },
+    "rule_based_agent_1": {
+     "score": {
+      "mean": 2.725,
+      "ci95": 0.3024754070322023
+     },
+     "coins": {
+      "mean": 2.175,
+      "ci95": 0.21228281836944404
+     },
+     "kills": {
+      "mean": 0.11,
+      "ci95": 0.04347312691559115
+     },
+     "suicides": {
+      "mean": 0.505,
+      "ci95": 0.06946688448607008
+     },
+     "bombs": {
+      "mean": 19.72,
+      "ci95": 1.317093500570947
+     },
+     "invalid": {
+      "mean": 6.765,
+      "ci95": 0.6313747290177292
+     },
+     "margin_vs_mean_other": {
+      "mean": -0.22,
+      "ci95": 0.39514570321233305
+     },
+     "alone_first_rate": 0.19
+    },
+    "rule_based_agent_2": {
+     "score": {
+      "mean": 2.895,
+      "ci95": 0.37240194392510356
+     },
+     "coins": {
+      "mean": 2.22,
+      "ci95": 0.20894762104821518
+     },
+     "kills": {
+      "mean": 0.135,
+      "ci95": 0.051384589911782005
+     },
+     "suicides": {
+      "mean": 0.45,
+      "ci95": 0.06912213355166105
+     },
+     "bombs": {
+      "mean": 18.615,
+      "ci95": 1.2550644557713773
+     },
+     "invalid": {
+      "mean": 6.585,
+      "ci95": 0.5724083496892493
+     },
+     "margin_vs_mean_other": {
+      "mean": 0.006666666666666663,
+      "ci95": 0.4496702032137458
+     },
+     "alone_first_rate": 0.19
+    }
+   }
+  }
+ ]
+}
