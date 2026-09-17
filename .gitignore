@@ -111,3 +111,35 @@ screenshots/*.webm
 
 replays/
 results/
+# Training artifacts. Regenerate by training; the submitted model is added deliberately.
+agent_code/*/logs/
+agent_code/*/training_log.csv
+agent_code/*/eval_curve.csv
+agent_code/*/my-saved-model.pt
+
+# DQN checkpoints (large, regenerable)
+agent_code/*/checkpoints/
+
+# Working weights while the agent is still bad. When the model is the real
+# submission, add it deliberately: git add -f agent_code/dqn_agent/dqn-model.pt
+agent_code/*/dqn-model.pt
+
+# Superseded files the sandbox could not delete
+*.REPLACED-*
+
+# Per-run agent copies created by tools/sweep.py
+# Per-run agent copies from tools/sweep.py. The two kept models
+# (dqn_baseline, dqn_global_view) are tracked; their bulky checkpoint
+# folders stay ignored, since experiments/sweep_results.csv holds every
+# number they produced.
+agent_code/dqn_*/
+!agent_code/dqn_agent/
+!agent_code/dqn_baseline/
+!agent_code/dqn_global_view/
+_to_delete/
+
+# macOS finder droppings
+.DS_Store
+
+# Rotated training logs (superseded headers)
+agent_code/*/training_log.*.csv
