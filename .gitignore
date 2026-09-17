@@ -143,3 +143,6 @@ _to_delete/
 
 # Rotated training logs (superseded headers)
 agent_code/*/training_log.*.csv
+
+# aus dem q_agent-Branch: Modellablagen aus Testlaeufen
+agent_code/q_agent/old_models/

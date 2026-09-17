@@ -1,14 +1,16 @@
 from .features import (state_to_features, danger_map, get_action_mask,
                        bfs_direction_and_distance, get_blast_coords,
-                       bfs_to_opponents, escape_exists)
+                       bfs_to_opponents, escape_exists, opponent_in_blast)
 import events as e
 import csv
 from collections import deque
+import copy
 
 # one row per round next to model.npy, for the training curves
 LOG_COLUMNS = ["round", "steps", "reward", "td_abs_mean", "epsilon", "lr",
                "coins", "crates", "bombs", "kills", "suicides", "got_killed",
-               "invalid", "bombed_opponent", "trapped_opponent"]
+               "invalid", "bombed_opponent", "trapped_opponent",
+               "opp_max_score", "win"]
 
 IN_DANGER = "IN_DANGER"
 MOVED_CLOSER_TO_COIN = "MOVED_CLOSER_TO_COIN"
@@ -20,17 +22,34 @@ MOVED_CLOSER_TO_OPPONENT = "MOVED_CLOSER_TO_OPPONENT"
 MOVED_FARTHER_FROM_OPPONENT = "MOVED_FARTHER_FROM_OPPONENT"
 BOMBED_OPPONENT = "BOMBED_OPPONENT"
 TRAPPED_OPPONENT = "TRAPPED_OPPONENT"
+# FOURTH FIX
+WAITED_WITH_OPPONENTS = "WAITED_WITH_OPPONENTS"
+# P5
+AMBUSH_READY = "AMBUSH_READY"
+WIN_ROUND = "WIN_ROUND"
 
 # TODO: are these the best values for our case?
 # Hyperparameter training
 def setup_training(self):
+
+    # use the last obtained checkpoint from Task 3 
+    self.model.load("model_task3_best.npy")
+    
     self.epsilon = 0.2
     self.epsilon_min = 0.05
     self.epsilon_decay = 0.9995 # multiply after every round
-    self.lr = 0.01
-    self.lr_min = 0.001
-    self.lr_decay = 0.9995
+    self.lr = 0.005 # SECOND FIX
+    self.lr_min = 0.0005
+    self.lr_decay = 0.999
     self.gamma = 0.95
+
+    # THIRD FIX:
+    # target network: bootstrap off a slow-moving snapshot rather than the
+    # weights we're actively updating, so an action whose next state looks
+    # like its current state (WAIT, once opponents make it legal everywhere)
+    # can't feed its own overestimation straight back into itself every step
+    self.target_model = copy.deepcopy(self.model)
+    self.target_sync_every = 100
 
     self.recent_positions = deque(maxlen=10)
 
@@ -65,6 +84,10 @@ def game_events_occurred(self, old_game_state, self_action, new_game_state, even
         if (nx, ny) in dmap:
             events.append(IN_DANGER)
 
+    # 4. FIX:
+    if self_action == 'WAIT' and old_game_state is not None and old_game_state['others']:
+        events.append(WAITED_WITH_OPPONENTS)
+        
     # dense scape signal: reward for leaving a blast zone
     if old_game_state is not None and new_game_state is not None:
         _,_,_, o_pos = old_game_state['self']
@@ -102,6 +125,16 @@ def game_events_occurred(self, old_game_state, self_action, new_game_state, even
                                      assume_own_bomb=False):
                     events.append(TRAPPED_OPPONENT)
                     break
+
+    # P5: am I in position to land a bomb on a rival *right now*?
+    # (bomb ready, a rival in the blast of a bomb at our feet, and we can
+    # escape it). This is the "directed bombing" signal task 3 is missing.
+    if new_game_state is not None:
+        _, _, new_can_bomb, (nx, ny) = new_game_state['self']
+        if (new_can_bomb and new_game_state['others'] and opponent_in_blast(nx, ny, new_game_state['field'],new_game_state['others'])
+            and escape_exists((nx, ny), new_game_state['field'], new_game_state['bombs'], new_game_state['others'], new_game_state['explosion_map'])):
+            events.append(AMBUSH_READY)
+
 
     # dense shaping: avoid back and forth 
     if old_game_state is not None and new_game_state is not None:
@@ -142,7 +175,7 @@ def game_events_occurred(self, old_game_state, self_action, new_game_state, even
 
     # Bootstrapped TD target: 
     # reward now + discounted best value of where we ended up 
-    future_q = self.model.predict(new_f)
+    future_q = self.target_model.predict(new_f)
     mask = get_action_mask(new_game_state)
     allowed_future_q = {a: q for a, q in future_q.items() if mask[a]} or future_q
     td_target = reward + self.gamma * max(allowed_future_q.values())
@@ -155,6 +188,13 @@ def game_events_occurred(self, old_game_state, self_action, new_game_state, even
 
 # save final obtained model 
 def end_of_round(self, last_game_state, last_action, events):
+    # P5: shape toward the actual Task-3 goal -- WINNING the round, not just
+    # farming. Auxiliary reward, absent in official (non-training) games.
+    if last_game_state is not None and last_game_state.get('others'):
+        my_score = last_game_state['self'][1]
+        if my_score > max(o[1] for o in last_game_state['others']):
+            events.append(WIN_ROUND)
+
     last_f = state_to_features(last_game_state)
     reward = reward_from_events(self, events)
     note_events(self, events, reward)
@@ -177,8 +217,17 @@ def end_of_round(self, last_game_state, last_action, events):
     self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
     self.lr = max(self.lr_min, self.lr * self.lr_decay)
 
+    # THIRD FIX
+    if last_game_state['round'] % self.target_sync_every == 0:
+        self.target_model = copy.deepcopy(self.model)
+
 
 def write_round_log(self, last_game_state):
+    opp_score = [ o[1] for o in (last_game_state.get('others') or [])]
+    opp_max = max(opp_score) if opp_score else 0
+    my_score = last_game_state['self'][1]
+    win = 1 if my_score > opp_max else 0
+
     counted = self.round_events
     row = [
         last_game_state["round"],
@@ -196,6 +245,8 @@ def write_round_log(self, last_game_state):
         counted.get(e.INVALID_ACTION, 0),
         counted.get(BOMBED_OPPONENT, 0),
         counted.get(TRAPPED_OPPONENT, 0),
+        opp_max,
+        win,
     ]
     with open(self.log_path, "a", newline="") as fh:
         csv.writer(fh).writerow(row)
@@ -210,7 +261,7 @@ def reward_from_events(self, events):
 
     game_rewards = {
         e.COIN_COLLECTED: 1,
-        e.KILLED_OPPONENT: 5,
+        e.KILLED_OPPONENT: 6,
         e.KILLED_SELF: -15,
         e.GOT_KILLED: -8,
         e.INVALID_ACTION: -1,
@@ -218,17 +269,20 @@ def reward_from_events(self, events):
         e.CRATE_DESTROYED: 0.5, # should it be dropped to 0.25? 
         e.COIN_FOUND: 0.3,
         e.SURVIVED_ROUND: 0.5,
-        IN_DANGER: -0.05,       # dense, immediate
+        IN_DANGER: -0.15,       # dense, immediate
         MOVED_CLOSER_TO_COIN: 0.1,
         MOVED_FARTHER_FROM_COIN: -0.1,  # same magnitude
         BOMBED_CRATES: 0.3,
-        ESCAPED_DANGER: 0.4,
+        ESCAPED_DANGER: 0.5,
         STALLED: -0.3,
         # raising these to 1.0 / 2.0 was measured twice and lost both times
-        BOMBED_OPPONENT: 0.5,
-        TRAPPED_OPPONENT: 0.0,
-        MOVED_CLOSER_TO_OPPONENT: 0.05,
-        MOVED_FARTHER_FROM_OPPONENT: -0.05,  # same magnitude, no free farming
+        BOMBED_OPPONENT: 0.8,
+        TRAPPED_OPPONENT: 2.0, # NEW SIGNAL: a bomb they cannot escape (stacks with BOMBED_OPPONENT above)
+        MOVED_CLOSER_TO_OPPONENT: 0.15,
+        MOVED_FARTHER_FROM_OPPONENT: -0.15,  # same magnitude, no free farming
+        WAITED_WITH_OPPONENTS: -0.1, # 4. FIX
+        AMBUSH_READY: 0.3, # P5: bombe ready and rival in blast
+        WIN_ROUND: 1.5, # P%: explicitily winning the run 
     }
-    STEP_PENALTY = -0.02 # bc coins should be collected as fast as possible
+    STEP_PENALTY = -0.03 # bc coins should be collected as fast as possible
     return STEP_PENALTY + sum(game_rewards.get(ev, 0) for ev in events)

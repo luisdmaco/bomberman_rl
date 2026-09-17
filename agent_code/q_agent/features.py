@@ -23,6 +23,12 @@ def get_action_mask(game_state):
 
     mask = {a : True for a in ACTIONS}
 
+    # P2: voluntary WAIT is banned outright. It was the #1 suicide driver
+    # (standing still next to your own ticking bomb) and a linear model never
+    # uses it strategically. It is only re-enabled by the empty-mask fallback
+    # at the bottom, when literally no move is possible.
+    mask['WAIT'] = False
+
     # Don't walk into a tile that is going to explode
     for action, pos in directions.items():
         if not get_walkable(field, pos[0], pos[1], bombs, others):
@@ -30,22 +36,38 @@ def get_action_mask(game_state):
         elif danger_at(pos, dmap) == 0:
             mask[action] = False
 
-    # dont step onto tile we cannot escape from, but only while another
-    # move survives -- masking the last one hands us to the WAIT fallback
+    # Prune moves that walk into a spot with no escape route, but only
+    # while at least one other move still survives -- otherwise pruning
+    # the last one would fall through to the WAIT fallback below, which
+    # is worse than trying even a doomed move. If every option is doomed,
+    # don't prune here; the block below keeps only the move whose blast
+    # arrives latest instead of leaving the choice to chance.
     if bombs:
         movable = [a for a in directions if mask[a]]
-        if len(movable) > 1:
+        if movable:
             doomed = [a for a in movable
                       if not escape_exists(directions[a], field, bombs, others,
                                            explosion_map, assume_own_bomb=False)]
-            if len(doomed) < len(movable):
+            survivors = [a for a in movable if a not in doomed]
+            if survivors: # only prunes if there is somewhere to move
                 for action in doomed:
                     mask[action] = False
+            # if survivors is empty, all doomed are legal, bc at least
+            # the agent can try and run 
+            else:
+                # every move is doomed: don't let argmax pick one at random
+                # (possibly straight into the blast) -- keep only the move
+                # toward the tile that explodes LAST, so the agent runs as
+                # far from the incoming blast as physics allow
+                def _deadline(a):
+                    d = danger_at(directions[a], dmap)
+                    return 99 if d is None else d
+                best_t = max(_deadline(a) for a in movable)
+                for action in movable:
+                    if _deadline(action) < best_t:
+                        mask[action] = False
 
-    # Never wait inside a blast zone or when is playing solo
-    if danger_at((x,y), dmap) is not None or len(others) == 0:
-        mask['WAIT'] = False
-
+    # WAIT is already banned at the top, only at the bottom can it be re-enabled
     # Bomb: ask what the blast catches
     blast = get_blast_coords(x, y, field)
     hits_crate = any(field[bx, by] == 1 for (bx, by) in blast)
@@ -59,8 +81,19 @@ def get_action_mask(game_state):
         mask['BOMB'] = False
 
     # Never hand back zero legal actions
+    # CHANGE: 
     if not any(mask.values()):
-        mask['WAIT'] = True
+        safe_moves = [a for a, pos in directions.items()
+            if get_walkable(field, pos[0], pos[1], bombs, others)
+            and danger_at(pos, dmap) != 0]
+        if safe_moves: # keep the one that is less near to explode
+            best = max(safe_moves,
+                       key=lambda a: 99 if danger_at(directions[a], dmap) is None
+                            else danger_at(directions[a], dmap))
+            mask = {a: False for a in ACTIONS}
+            mask[best] = True
+        else:
+            mask['WAIT'] = True
 
     return mask 
 
