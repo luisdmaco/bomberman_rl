@@ -1,0 +1,66 @@
+{
+  "preset": "task4",
+  "commit": "a55c1f5bae19b0d417bcef7827196f1987d6802a",
+  "scenario": "classic",
+  "opponents": [
+    "rule_based_agent",
+    "rule_based_agent",
+    "rule_based_agent"
+  ],
+  "rounds": 5000,
+  "eps_decay": 2500,
+  "started": "2026-09-15 20:56:20",
+  "runs": {
+    "ctrl_s1": {
+      "DQN_VIEW": "ego:13",
+      "DQN_REWARD_PROFILE": "score",
+      "DQN_THREADS": "1",
+      "OMP_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "DQN_SEED": "1"
+    },
+    "ctrl_s2": {
+      "DQN_VIEW": "ego:13",
+      "DQN_REWARD_PROFILE": "score",
+      "DQN_THREADS": "1",
+      "OMP_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "DQN_SEED": "2"
+    },
+    "gamma99": {
+      "DQN_VIEW": "ego:13",
+      "DQN_REWARD_PROFILE": "score",
+      "DQN_THREADS": "1",
+      "OMP_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "DQN_SEED": "1",
+      "DQN_GAMMA": "0.99"
+    },
+    "augment": {
+      "DQN_VIEW": "ego:13",
+      "DQN_REWARD_PROFILE": "score",
+      "DQN_THREADS": "1",
+      "OMP_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "DQN_SEED": "1",
+      "DQN_AUGMENT": "1"
+    },
+    "target250": {
+      "DQN_VIEW": "ego:13",
+      "DQN_REWARD_PROFILE": "score",
+      "DQN_THREADS": "1",
+      "OMP_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "DQN_SEED": "1",
+      "DQN_TARGET_UPDATE": "250"
+    },
+    "global": {
+      "DQN_VIEW": "global",
+      "DQN_REWARD_PROFILE": "score",
+      "DQN_THREADS": "1",
+      "OMP_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "DQN_SEED": "1"
+    }
+  }
+}
