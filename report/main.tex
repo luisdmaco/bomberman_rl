@@ -107,6 +107,8 @@ let a network learn the representation?
 
 We developed two structurally different agents, \textbf{\code{q\_agent}} and \textbf{\code{dqn\_agent}}, which approach the learning problem in different ways. While \textbf{\code{q\_agent}} relies on manually designed representations incorporating domain knowledge, \textbf{\code{dqn\_agent}} learns its representation directly from the game state. This allows us to investigate the central question of this report: under a fixed time budget, how does the use of domain knowledge compare to learning representations directly from the environment?
 
+After the final frozen head-to-head evaluation, we submitted \textbf{\code{q\_agent}}. It achieved the higher score in the paired tournament-shaped comparison, although the DQN remained safer in terms of suicide rate.
+
 %\authorline{Diana Krasnokutskaya}
 
 % ============================================================
@@ -254,12 +256,17 @@ example of model-free RL in the lecture.
 % ============================================================
 \authorline{Luis Maco}
 
-We are a team of three (Diana Krasnokutskaya, Daniela Ardila Porras, Luis Maco) working
-on the final project for Machine Learning Essentials, Summer Semester 2026. The project
-ran from registration in the week of 31.08 to the report deadline on 28.09, with an
-optional crash test on 17.09 and code due on 21.09.
+This project was developed by a team of three, Diana Krasnokutskaya, Daniela Ardila
+Porras, and Luis Maco, for Machine Learning Essentials in the Summer Semester 2026. The
+code, experiment logs, and trained models are available in the project repository:
+\url{https://github.com/luisdmaco/bomberman_rl}.
 
-\subsection*{The plan}
+The work ran from registration in the week of 31.08 to the report deadline on 28.09. The
+main code deadline was 21.09, with an optional crash test on 17.09. This section describes
+the original plan, the division of responsibilities, and the changes that followed from
+the experimental results.
+
+\subsection{The plan}
 
 The specification prioritises systematic testing over tournament placement. We therefore
 recorded a before/after number for every design change, built an evaluation harness before
@@ -285,7 +292,7 @@ bombing, hunting weaker agents, and beating \code{rule\_based\_agent}. Task 2 wa
 critical path because escaping bombs is crucial and most tournament losses are
 self-inflicted, so we placed it in week 1 to leave time for iteration.
 
-\subsection*{How it actually went}
+\subsection{How it actually went}
 
 Both agents reached the Task 1 gate on 06.09: the DQN collected 46.06 of 50
 coins (95\% CI [45.5, 46.7], zero invalid actions), and the feature-based agent matched the
@@ -307,7 +314,7 @@ The DQN arm froze on 16.09, four days ahead of schedule, after a controlled swee
 (Section~\ref{sec:results}) showed that seed variation exceeded every tested hyperparameter
 effect. We spent the remaining days confirming the result and writing it up.
 
-\subsection*{Hardware}
+\subsection{Hardware}
 
 Neither model needed a GPU. The DQN has 353k parameters, only about 6k of them
 convolutional, and profiling (Section~\ref{sec:training}) showed that gradient steps
@@ -323,7 +330,7 @@ RAM, using one CPU thread per process. Both agents also respect the tournament's
 \label{sec:methods-q}
 \textit{Author: Daniela Ardila}
  
-\subsubsection*{State representation}
+\subsubsection{State representation}
 \code{q\_agent} does not see the board itself, but a vector
 $\phi(s) \in \mathbb{R}^{34}$ of hand-crafted features (Table~\ref{tab:q-features}).
 Most of them come from a breadth-first search (BFS) from the agent's tile over
@@ -355,7 +362,7 @@ opponent direction (5), distance (1), \code{opp\_in\_blast} (1) & first step to 
 \end{tabular}
 \end{table}
  
-\subsubsection*{Model and learning rule}
+\subsubsection{Model and learning rule}
 As in Section~\ref{sec:bg-dqn}, the Q-function is linear with one weight vector per
 action, $Q(s,a) = \phi(s)^\top \beta_a$. All weights start at zero, and later tasks
 warm-start from the previous one (Section~\ref{sec:q-task3-training}). After every step, the TD
@@ -384,7 +391,7 @@ allowed actions (a random one with probability $\varepsilon$~\cite{sutton2018}),
 $\varepsilon$ starting at $0.2$ and decaying by $\times 0.9995$ per round to $0.05$. A
 checkpoint is saved every 250 rounds.
  
-\subsubsection*{Actions and masking}
+\subsubsection{Actions and masking}
 The action mask reduces $A$ to a state-dependent set $A(s) \subseteq A$. It removes
 actions that are illegal, provably suicidal or useless, as well as voluntary \code{WAIT},
 and leaves the choice among the rest to $Q$:
@@ -407,14 +414,14 @@ of the safe exploration that SARSA would give (Section~\ref{sec:bg-value}). Sinc
 actions are executed in random order (Section~\ref{sec:bg-mdp}), an opponent can still
 enter the target tile first; the move then fails with \code{INVALID\_ACTION}.
  
-\subsubsection*{Episode boundaries}
+\subsubsection{Episode boundaries}
 Every end of a round is treated as terminal, $R_t = \hat r_{t+1}$: death, which ends
 the round in training mode, and the 400-step limit. Strictly, since the step counter is
 not a feature, the step limit should be treated as a truncation and
 bootstrapped~\cite{pardo2018}, as \code{dqn\_agent} does. We kept the terminal target,
 which affects only the last transition of rounds that reach step 400.
  
-\subsubsection*{Reward shaping}
+\subsubsection{Reward shaping}
 The shaped reward $\hat r_{t+1}$ of the final model is the sum of the event rewards in
 Table~\ref{tab:q-rewards} and a step penalty of $-0.03$. Besides the opponent events of
 Section~\ref{sec:q-task3-training}, \code{IN\_DANGER} fires on a tile inside a current or coming
@@ -458,7 +465,7 @@ even depends on past positions. So $\hat r$ can change the optimal
 policy~\cite{ng1999}. We accept this bias and judge every change only by the official
 score in frozen evaluation.
  
-\subsubsection*{Evaluation methodology}
+\subsubsection{Evaluation methodology}
 All \code{q\_agent} results use frozen policies (\code{train=False}): no exploration
 and no updates, so a fixed seed gives exactly the same games. \code{evaluate\_models.py}
 loads every checkpoint and plays 100 rounds on \code{classic} with seed 42. It reports
@@ -473,7 +480,7 @@ Section~\ref{sec:results} (margin against the mean opponent, 95\% confidence int
 \subsection{The DQN agent}
 \authorline{Luis Maco}
 
-\subsubsection*{State representation}
+\subsubsection{State representation}
 
 \code{dqn\_agent} reads six board channels: walls, crates, self, opponents, coins, and
 danger countdowns. The channels remain fixed across tasks, including the channels that are
@@ -481,7 +488,7 @@ empty on Task 1. The board is represented either globally at $17\times17$ or as 
 $13\times13$ window centred on the agent (\code{ego:13}); this choice is stored with the
 checkpoint because the tournament provides no environment variables.
 
-\subsubsection*{Network and learning rule}
+\subsubsection{Network and learning rule}
 
 The agent is a Double DQN \cite{vanhasselt2016} with a target network synchronised every
 1000 gradient steps and a uniform replay buffer of 50{,}000 transitions. Double DQN
@@ -489,7 +496,7 @@ separates action selection from evaluation in the bootstrap target, reducing the
 overestimation bias of vanilla DQN \cite{vanhasselt2016}. A small convolutional front end
 feeds a fully connected head with one output per action.
 
-\subsubsection*{Actions and masking}
+\subsubsection{Actions and masking}
 
 All six actions are available at the architecture level. A legal-action mask removes moves
 into blocked or immediately lethal tiles and is also applied to the Double-DQN target. An
@@ -498,13 +505,13 @@ within the four-step fuse; from Task 3 onward it also considers tiles an opponen
 first. The suicide mask is enabled only at play time, while the legal-action mask is always
 active.
 
-\subsubsection*{Episode boundaries}
+\subsubsection{Episode boundaries}
 
 A round that reaches the 400-step limit is treated as a truncation, following Pardo et al.\
 \cite{pardo2018}. It is not assigned a terminal target with value zero, which previously
 combined with potential shaping to reward being far from a coin at timeout.
 
-\subsubsection*{Reward shaping}
+\subsubsection{Reward shaping}
 
 The base reward is sparse, so \code{dqn\_agent} adds potential-based shaping and custom
 events. Following Ng, Harada and Russell \cite{ng1999}, it uses
@@ -525,7 +532,7 @@ events plus safety shaping, and \code{score\_hunt}, which adds a bonus for an es
 threatening an opponent. We introduced them after observing a mismatch between training
 reward and the tournament scoreboard.
 
-\subsubsection*{Symmetry augmentation}
+\subsubsection{Symmetry augmentation}
 
 The \code{classic} board is invariant under eight square symmetries. Augmentation is applied
 when sampling from replay, per sample rather than per batch, so the original transition is
@@ -533,7 +540,7 @@ stored once and transformed orientations are sampled independently. It affects t
 only. Action permutations were checked by comparing transformed states with recomputed
 features for all eight group elements.
 
-\subsubsection*{Evaluation methodology}
+\subsubsection{Evaluation methodology}
 
 All DQN results use frozen policies (\code{train=False}). Comparisons use fixed seeds,
 $N \geq 200$ rounds, and $N=1000$ near gate thresholds; a gate passes only when its whole
@@ -620,7 +627,7 @@ We added three feature groups, which brings the vector from 27 to 34 entries
   \label{tab:opp-features}
   \begin{tabularx}{\linewidth}{@{}l Y r@{}}
     \toprule
-    Feature & Encoding & Purpose \\
+\toprule
     \midrule
     \code{opp\_dir\_{up,down,left,right,none}} & one-hot, first step of a BFS to the nearest reachable opponent & where to go to hunt \\
     \code{opp\_dist} & $1/d$, 0 if no opponent is reachable & how urgent / how close \\
@@ -679,7 +686,7 @@ crates, bombs, kills, suicides, deaths, invalid actions and the two opponent-bom
 paid off right away. When Daniela continued the task-3 training, the log showed kills and
 reward getting worse over a 5000-round run while \code{WAIT}'s weight vector grew without
 bound. That was the evidence for her diagnosis of maximization-bias divergence and for the
-fixes in section~5.2 \todo{check section number}: weight-norm clipping, a target network,
+fixes in Section~\ref{sec:methods-q}: weight-norm clipping, a target network,
 and banning voluntary \code{WAIT}. It also showed that \code{TRAPPED\_OPPONENT} fired
 regularly while carrying no reward, which led to setting it to $+2.0$, the most effective
 single change of task~3.
@@ -750,7 +757,7 @@ it with \code{dqn\_agent}.
 \label{sec:training}
 \authorline{Luis Maco}
 
-\subsubsection*{Curriculum}
+\subsubsection{Curriculum}
 
 Training followed the four-task curriculum, resuming weights between stages. On Task 1 (\code{coin-} \code{heaven}), \code{BOMB} and \code{WAIT} were removed from exploration because an
 $\varepsilon{=}1$ policy could otherwise die before collecting experience. Task 1 does not
@@ -758,7 +765,7 @@ require bombs, so the mask was lifted for Task 2. We also used a temporary \code
 scenario with crate density 0.35 instead of the tournament's 0.75; it exists only in
 \code{settings.py}.
 
-\subsubsection*{Opponent choice as a training variable}
+\subsubsection{Opponent choice as a training variable}
 
 From Task 3 onward, opponent choice had a substantial effect. Two 4000-round runs resumed
 from the same checkpoint and differed only in the opponent: the agent scored 81 kills,
@@ -768,7 +775,7 @@ the agent; the latter approaches and bombs it. We therefore used three copies of
 \code{rule\_based\_agent} as the Task 4 training partners rather than the easier opponents
 used earlier in the curriculum.
 
-\subsubsection*{Training efficiency}
+\subsubsection{Training efficiency}
 
 Profiling one training round showed gradient steps at 92\% of the cost, compared with 5\%
 for acting and 2\% for feature extraction. We therefore stored replay data as \code{uint8}
@@ -777,7 +784,7 @@ and ran ablations as separate single-threaded processes. Six configurations cove
 roughly 7.2 million environment steps then completed in 51 minutes instead of an estimated
 five hours sequentially.
 
-\subsubsection*{Reward shaping problems found and fixed during training}
+\subsubsection{Reward shaping problems found and fixed during training}
 
 Two reward problems surfaced during training. The potential-based shaping term, computed
 with the same discount as the agent's $\gamma=0.95$, leaves a residual of
@@ -797,7 +804,7 @@ moved from $-0.44$ to $+2.67$ once the four Task 2 reward fixes (including suppr
 ``entered danger'' penalty on the step a bomb is deliberately dropped) were applied
 together.
 
-\subsubsection*{Checkpointing and instability}
+\subsubsection{Checkpointing and instability}
 
 Checkpoints were evaluated frozen, and the best rather than the last checkpoint was kept.
 Most from-scratch egocentric-view runs peaked while $\varepsilon$ was still around 0.84,
@@ -805,7 +812,7 @@ then decayed as invalid actions rose from 0 to 40--80 per round. This is consist
 online-DQN instability. The global-view run improved monotonically, leaving the egocentric
 crop as a possible contributor and an open problem (Section~\ref{sec:results_dqn}).
 
-\subsubsection*{Reward-profile progression toward the tournament objective}
+\subsubsection{Reward-profile progression toward the tournament objective}
 
 The Task 2 \code{curriculum} profile paid for crate destruction that had no direct scoreboard
 equivalent: \code{CRATE\_DESTROYED} contributed roughly $+24$ training reward per round.
@@ -814,7 +821,7 @@ added \code{score\_hunt}, a bonus for an escapable bomb threatening an opponent.
 boards verified that it did not fire for suicidal bombs or crate-only demolition, and the
 profile improved the tournament margin (Section~\ref{sec:results_dqn}).
 
-\subsubsection*{Fine-tuning}
+\subsubsection{Fine-tuning}
 
 When a policy overfit to one training distribution and lost general ability
 (Section~\ref{sec:results_dqn}), a short, low-learning-rate fine-tune from the same checkpoint was sufficient: 1500 solo rounds at one fifth of the normal learning rate, 7.6 minutes of wall clock, recovered solo coin collection from 4.95 to 7.87 coins while keeping the tournament gate the model had already passed.
@@ -904,7 +911,7 @@ without any retraining. This shows how much of the agent's behaviour comes from 
 
 The large jump to $+5.14$ came from the next step, which builds on this work: Daniela's fixes for the divergence found in my training log, together with pricing \code{TRAPPED\_OPPONENT} at $+2.0$. Over the 3000 training rounds behind that checkpoint, 82.5\% of rounds ended with our agent ahead of both opponents. The general lesson of task~3 is that for a linear model \textbf{the event that predicts the outcome must carry reward}. \code{BOMBED\_OPPONENT} fires for every bomb near an opponent, most of which the opponent simply walks out of. \code{TRAPPED\_OPPONENT} fires only for bombs the opponent cannot escape, and those are almost always kills. As long as it carried zero reward, the agent had no reason to prefer the bombs that actually work.
 
-To connect task~3 to the tournament, my checkpoint was later also evaluated against three \code{rule\_based\_agent}s ($N = 200$, seed 157): score 3.065, margin $+0.233$ against the mean opponent, strictly first in 23.5\% of rounds, but \textbf{suicide in 61.5\% of rounds}. Hunting weak opponents and surviving a crowded board are different skills. The later task-4 training of the Q agent (section~6.2 \todo{check}) improved exactly this weakness.
+To connect task~3 to the tournament, my checkpoint was later also evaluated against three \code{rule\_based\_agent}s ($N = 200$, seed 157): score 3.065, margin $+0.233$ against the mean opponent, strictly first in 23.5\% of rounds, but \textbf{suicide in 61.5\% of rounds}. Hunting weak opponents and surviving a crowded board are different skills. The later task-4 training of the Q agent (Section~\ref{sec:q-task4}) improved exactly this weakness.
 
 
 \subsubsection{Task 4 and the final model}
@@ -982,7 +989,7 @@ All numbers below are measured frozen (\code{train=False}), with $N \geq 200$ ro
 fixed seed list unless noted, and a gate counts as passed only when the whole 95\%
 confidence interval clears its threshold.
 
-\subsubsection*{Baselines}
+\subsubsection{Baselines}
 
 On \code{coin-heaven}, an untrained network acting under an $\varepsilon$-greedy random
 policy averages about 18 coins with roughly 145 invalid actions per 400-step round;
@@ -991,7 +998,7 @@ solo \code{classic}, \code{rule\_based\_agent} averages 8.60 coins with 0\% suic
 four-player tournament shape (three copies of \code{rule\_based\_agent}) it averages a 3.30
 mean score with 6.9 invalid actions per round of its own.
 
-\subsubsection*{Gate results}
+\subsubsection{Gate results}
 
 \begin{table}[h]
 \centering
@@ -1021,7 +1028,7 @@ its tournament margin against the weakest of three
 selected checkpoint. Both pass Task 4, while checkpoint C performs better on the solo and
 passive-opponent tests.
 
-\subsubsection*{Measurement and implementation bugs}
+\subsubsection{Measurement and implementation bugs}
 
 Four bugs were identified through measurement.
 
@@ -1050,7 +1057,7 @@ Before the fourth bug was fixed, a six-configuration ablation varying shaping, v
 learning rate, and batch settings placed all configurations between 2.95 and 5.20 frozen
 coins with overlapping intervals. This lack of separation led to the transition-cache bug.
 
-\subsubsection*{Specialization under training against \code{rule\_based\_agent}}
+\subsubsection{Specialization under training against \code{rule\_based\_agent}}
 
 A checkpoint trained purely against three \code{rule\_based\_agent}s
 (\code{task4-classic-r3250}) passed Task 4 with a $+0.78 \pm 0.25$ margin at $N{=}1000$.
@@ -1071,7 +1078,7 @@ gate and weaker performance on the solo-coin and peaceful-hunting curriculum tes
 earlier checkpoints had passed. Task 4 is the specification's requirement; Tasks 1--3 are
 the project's curriculum checkpoints.
 
-\subsubsection*{Hyperparameter sweep and seed sensitivity}
+\subsubsection{Hyperparameter sweep and seed sensitivity}
 
 \begin{comment}
 \authorline{Diana Krasnokutskaya}
@@ -1196,7 +1203,7 @@ establish that the tested factors are unimportant with longer training. We stopp
 the sweep because no tested configuration had matched the already-confirmed incumbent
 within the available budget.
 
-\subsubsection*{Selection}
+\subsubsection{Selection}
 
 \code{score\_hunt r1250} was chosen as the final DQN tournament candidate on Task 4, the
 specification's required gate. It was shortlisted from a 40-round-per-checkpoint curve,
@@ -1208,7 +1215,7 @@ passes Task 4 with a smaller positive margin and performs better on the solo and
 passive-opponent tests reported above, but has a higher crowded-room suicide rate
 (32.5\% against 10.9\%).
 
-\subsubsection*{Controlled comparison with the feature-based agent}
+\subsubsection{Controlled comparison with the feature-based agent}
 
 Using the shared frozen comparison protocol (\code{tools/compare\_team\_agents.py}), both
 agents were evaluated separately against the same seeded three-\code{rule\_based\_agent}
@@ -1314,7 +1321,7 @@ context, not as a tournament claim.
 Notably, the DQN's suicide rate almost triples (10.9\% $\rightarrow$ 29.4\%) when the Q
 agent replaces one rule-based agent. The Q agent apparently creates situations the DQN,
 fine-tuned only against rule-based opponents, has never seen. This matches the DQN audit in
-section~6.2 \todo{check}: the \code{score\_hunt} checkpoint is a specialist for exactly one
+Section~\ref{sec:training}: the \code{score\_hunt} checkpoint is a specialist for exactly one
 opponent type.
 
 \paragraph{Consequence.}
@@ -1324,8 +1331,10 @@ with a separated confidence interval in the only configuration shaped like the t
 Two caveats remain. None of our configurations \emph{is} the tournament, where the opponents
 are other teams' agents. And the DQN's lower suicide rate in the solo protocol might matter
 against opponents that punish mistakes harder than \code{rule\_based\_agent} does. Since the
-tournament ranks by score, we submitted the \textbf{\code{q\_agent}} \todo{confirm final
-choice: \code{q\_agent} or \code{dqn\_agent}} as our tournament agent.
+tournament ranks by score, we submitted the \textbf{\code{q\_agent}} as our tournament
+agent. The paired comparison on the same board gave the Q agent a score of $4.448$ versus
+$3.567$ for the DQN, with a 95\% confidence interval for DQN minus Q of
+$[-1.167,-0.595]$.
 
 To make this comparison reproducible, I merged both agent branches into \code{master}, so
 the comparison is a single command:
@@ -1367,27 +1376,29 @@ The main findings of the project, as I see them, are:
   \item Provide a reference evaluation script with seeds and confidence intervals, which would make results comparable across teams.
 \end{itemize}
 
-\begin{comment}
 % ============================================================
 \section*{Work distribution}
 % ============================================================
-\begin{table}[h]
+The team followed the component-based split agreed at the kickoff rather than assigning
+one model to each person. All three members contributed to the curriculum, bomb-safety
+decisions, evaluation protocol, experiment discussions, and report review. The main areas
+of responsibility were as follows.
+
+\begin{table}[htbp]
 \centering
 \small
-\begin{tabular}{@{}lll@{}}
+\begin{tabular}{@{}p{0.22\linewidth}p{0.58\linewidth}p{0.14\linewidth}@{}}
 \toprule
-WP & Topic & Lead \\
+Work package & Main contribution & Lead \\
 \midrule
-WP1  & Data pipeline and preprocessing        & D.~Krasnokutskaya \\
-WP2a & Dense autoencoder                       & D.~Krasnokutskaya \\
-WP2b & Convolutional autoencoder               & J.~Mutluer \\
-WP3  & Optimizers, training loop, metrics      & J.~Mutluer \\
-WP4  & Latent-space and robustness analysis    & D.~Krasnokutskaya \\
-WP5  & Poster and report                       & both \\
+WP1 & Environment interface, BFS features, blast danger, escape checks, and action masking for the feature-based agent & Daniela \\
+WP2 & Linear Q-learning agent, reward shaping, curriculum training, and Q-agent checkpoint selection & Daniela \\
+WP3 & DQN architecture, Double DQN training loop, replay buffer, reward profiles, and DQN training experiments & Luis \\
+WP4 & Evaluation harness, experiment logging, plots, frozen comparisons, and submission checks & Luis \\
+WP5 & Task-3 opponent analysis, hyperparameter sweeps and ablations for both models, head-to-head evaluation, interpretation of results, and report synthesis & Diana \\
 \bottomrule
 \end{tabular}
 \end{table}
-\end{comment}
 
 % ============================================================
 \begin{thebibliography}{99}
